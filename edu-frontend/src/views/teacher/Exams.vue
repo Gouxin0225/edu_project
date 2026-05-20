@@ -1,0 +1,72 @@
+<template>
+  <div class="page-container">
+    <el-card shadow="never" class="cyber-card">
+      <template #header>
+        <div class="card-header">
+          <span class="card-title">考试管理</span>
+        </div>
+      </template>
+      <el-empty description="功能开发中...">
+        <template #image>
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="#00ffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 2V8H20" stroke="#00ffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 13H8" stroke="#00ffff" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M16 17H8" stroke="#00ffff" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M10 9H9H8" stroke="#00ffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </template>
+      </el-empty>
+    </el-card>
+  </div>
+</template>
+<script setup lang="ts"></script>
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+.page-container {
+  padding: 0;
+  background: #030303;
+  min-height: 100%;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.cyber-card {
+  background: #0a0a0a !important;
+  border: 1px solid #1a1a2e !important;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  box-shadow: 0 0 30px rgba(0, 255, 255, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5) !important;
+  height: calc(100vh - 120px);
+}
+
+.cyber-card :deep(.el-card__header) {
+  background: rgba(26, 26, 46, 0.4) !important;
+  border-bottom: 1px solid #1a1a2e !important;
+  padding: 15px 20px !important;
+}
+
+.cyber-card :deep(.el-card__body) {
+  background: #0a0a0a !important;
+  padding: 40px 20px !important;
+  height: calc(100% - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+}
+
+.card-title {
+  color: #00ffff !important;
+  font-weight: 600 !important;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.4) !important;
+  letter-spacing: 1px;
+}
+
+.cyber-card :deep(.el-empty__description) {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+</style>

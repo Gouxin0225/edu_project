@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.StudentSubmissionMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.StudentSubmission">
+        <id column="id" property="id" />
+        <result column="task_id" property="taskId" />
+        <result column="student_id" property="studentId" />
+        <result column="status" property="status" />
+        <result column="total_score_gained" property="totalScoreGained" />
+        <result column="teacher_comment" property="teacherComment" />
+        <result column="submit_time" property="submitTime" />
+        <result column="version" property="version" />
+        <result column="parent_submission_id" property="parentSubmissionId" />
+        <result column="switch_screen_count" property="switchScreenCount" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, task_id, student_id, status, total_score_gained, teacher_comment, submit_time, version, parent_submission_id, switch_screen_count
+    </sql>
+
+</mapper>

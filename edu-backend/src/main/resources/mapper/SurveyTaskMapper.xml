@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.SurveyTaskMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.SurveyTask">
+        <id column="id" property="id" />
+        <result column="title" property="title" />
+        <result column="end_time" property="endTime" />
+        <result column="creator_id" property="creatorId" />
+        <result column="target_class_ids" property="targetClassIds" />
+        <result column="is_anonymous_required" property="isAnonymousRequired" />
+        <result column="target_teacher_id" property="targetTeacherId" />
+        <result column="create_time" property="createTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, title, end_time, creator_id, target_class_ids, is_anonymous_required, target_teacher_id, create_time, is_deleted
+    </sql>
+
+</mapper>

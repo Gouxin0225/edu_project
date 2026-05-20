@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.AiKnowledgeDocumentMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.AiKnowledgeDocument">
+        <id column="id" property="id" />
+        <result column="title" property="title" />
+        <result column="course_category" property="courseCategory" />
+        <result column="knowledge_point" property="knowledgePoint" />
+        <result column="source_type" property="sourceType" />
+        <result column="source_name" property="sourceName" />
+        <result column="visibility" property="visibility" />
+        <result column="access_scope" property="accessScope" />
+        <result column="owner_id" property="ownerId" />
+        <result column="owner_role" property="ownerRole" />
+        <result column="chunk_count" property="chunkCount" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, title, course_category, knowledge_point, source_type, source_name, visibility, access_scope, owner_id, owner_role, chunk_count, create_time, update_time, is_deleted
+    </sql>
+
+</mapper>

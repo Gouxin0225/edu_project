@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.SurveyQuestionMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.SurveyQuestion">
+        <id column="id" property="id" />
+        <result column="survey_id" property="surveyId" />
+        <result column="type" property="type" />
+        <result column="title" property="title" />
+        <result column="options_json" property="optionsJson" />
+        <result column="is_required" property="isRequired" />
+        <result column="sort_order" property="sortOrder" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, survey_id, type, title, options_json, is_required, sort_order
+    </sql>
+
+</mapper>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.SurveyRecordMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.SurveyRecord">
+        <id column="id" property="id" />
+        <result column="survey_id" property="surveyId" />
+        <result column="student_id" property="studentId" />
+        <result column="client_ip" property="clientIp" />
+        <result column="submit_time" property="submitTime" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, survey_id, student_id, client_ip, submit_time
+    </sql>
+
+</mapper>

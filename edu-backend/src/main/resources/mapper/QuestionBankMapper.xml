@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.QuestionBankMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.QuestionBank">
+        <id column="id" property="id" />
+        <result column="course_category" property="courseCategory" />
+        <result column="knowledge_point" property="knowledgePoint" />
+        <result column="type" property="type" />
+        <result column="difficulty" property="difficulty" />
+        <result column="content" property="content" />
+        <result column="options_json" property="optionsJson" />
+        <result column="standard_answer" property="standardAnswer" />
+        <result column="analysis" property="analysis" />
+        <result column="creator_id" property="creatorId" />
+        <result column="is_ai_generated" property="isAiGenerated" />
+        <result column="is_public" property="isPublic" />
+        <result column="create_time" property="createTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, course_category, knowledge_point, type, difficulty, content, options_json, standard_answer, analysis, creator_id, is_ai_generated, is_public, create_time, is_deleted
+    </sql>
+
+</mapper>

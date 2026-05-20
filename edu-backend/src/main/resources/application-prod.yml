@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:28800000}
+
+logging:
+  level:
+    com.example.edubackend: ${APP_LOG_LEVEL:info}
+    org.mybatis: ${MYBATIS_LOG_LEVEL:warn}
+    com.baomidou.mybatisplus: ${MYBATIS_PLUS_LOG_LEVEL:warn}
+
+app:
+  cors:
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS}

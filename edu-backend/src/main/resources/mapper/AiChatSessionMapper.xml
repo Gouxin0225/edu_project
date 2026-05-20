@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.edubackend.mapper.AiChatSessionMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.edubackend.entity.AiChatSession">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="user_role" property="userRole" />
+        <result column="title" property="title" />
+        <result column="course_category" property="courseCategory" />
+        <result column="knowledge_point" property="knowledgePoint" />
+        <result column="last_message_time" property="lastMessageTime" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, user_role, title, course_category, knowledge_point, last_message_time, create_time, update_time, is_deleted
+    </sql>
+
+</mapper>

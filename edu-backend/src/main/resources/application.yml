@@ -1,0 +1,76 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: edu-backend
+  
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+    time-zone: Asia/Shanghai
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/edu_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&connectTimeout=30000&socketTimeout=30000&tcpKeepAlive=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:20MB}
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:25MB}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3000ms}
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:0}
+          max-wait: ${REDIS_POOL_MAX_WAIT:-1ms}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: ${MYBATIS_LOG_IMPL:org.apache.ibatis.logging.slf4j.Slf4jImpl}
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.example.edubackend.entity
+
+jwt:
+  secret: ${JWT_SECRET:dev-only-change-this-jwt-secret-before-production-2026}
+  expiration: ${JWT_EXPIRATION:28800000}
+  header: Authorization
+  prefix: "Bearer "
+
+logging:
+  level:
+    com.example.edubackend: ${APP_LOG_LEVEL:info}
+    org.mybatis: ${MYBATIS_LOG_LEVEL:warn}
+    com.baomidou.mybatisplus: ${MYBATIS_PLUS_LOG_LEVEL:warn}
+
+ai:
+  api:
+    key: ${AI_API_KEY:}
+    endpoint: ${AI_API_ENDPOINT:https://api.deepseek.com/v1/chat/completions}
+    model: ${AI_API_MODEL:deepseek-chat}
+  chat:
+    context-size: ${AI_CHAT_CONTEXT_SIZE:10}
+
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:/edu-platform/uploads}
+  allowed-extensions: ${FILE_ALLOWED_EXTENSIONS:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,md,png,jpg,jpeg,zip,rar,7z}
+
+app:
+  cors:
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3001,http://127.0.0.1:3001,http://192.168.50.149:3001}
