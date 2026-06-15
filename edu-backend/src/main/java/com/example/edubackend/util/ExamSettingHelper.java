@@ -24,6 +24,16 @@ public class ExamSettingHelper {
     private final ObjectMapper objectMapper;
 
     public String buildSettingJson(String rawSettingJson, Integer duration, Integer passScore, Boolean published) {
+        return buildSettingJson(rawSettingJson, duration, passScore, published, null, null);
+    }
+
+    public String buildSettingJson(
+            String rawSettingJson,
+            Integer duration,
+            Integer passScore,
+            Boolean published,
+            Boolean requireSurveyBeforeSubmit,
+            Long requiredSurveyId) {
         Map<String, Object> settings = readSettings(rawSettingJson);
         settings.put("duration", normalizePositive(duration, DEFAULT_DURATION_MINUTES));
         settings.put("passScore", normalizePositive(passScore, DEFAULT_PASS_SCORE));
@@ -31,6 +41,16 @@ public class ExamSettingHelper {
             settings.put("published", published);
         } else if (!settings.containsKey("published")) {
             settings.put("published", false);
+        }
+        if (requireSurveyBeforeSubmit != null) {
+            settings.put("requireSurveyBeforeSubmit", requireSurveyBeforeSubmit);
+            if (Boolean.TRUE.equals(requireSurveyBeforeSubmit)) {
+                settings.put("requiredSurveyId", requiredSurveyId);
+            } else {
+                settings.remove("requiredSurveyId");
+            }
+        } else if (!settings.containsKey("requireSurveyBeforeSubmit")) {
+            settings.put("requireSurveyBeforeSubmit", false);
         }
         return writeSettings(settings);
     }
@@ -101,6 +121,25 @@ public class ExamSettingHelper {
         }
         showAnalysis = getBoolean(exam, "show_analysis");
         return showAnalysis == null || showAnalysis;
+    }
+
+    public boolean isSurveyRequiredBeforeSubmit(AssessmentTask exam) {
+        return Boolean.TRUE.equals(getBoolean(exam, "requireSurveyBeforeSubmit"));
+    }
+
+    public Long getRequiredSurveyId(AssessmentTask exam) {
+        Object value = readSettings(exam.getSettingJson()).get("requiredSurveyId");
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Long.parseLong(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     public int getRemainingSeconds(AssessmentTask exam, LocalDateTime startedAt, LocalDateTime now) {

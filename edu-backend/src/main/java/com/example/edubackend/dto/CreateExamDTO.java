@@ -29,4 +29,8 @@ public class CreateExamDTO {
     private Integer totalScore = 100;
 
     private Integer passScore = 60;
+
+    private Boolean requireSurveyBeforeSubmit = false;
+
+    private Long requiredSurveyId;
 }

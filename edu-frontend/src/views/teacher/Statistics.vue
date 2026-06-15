@@ -36,6 +36,24 @@
       </div>
     </section>
 
+    <section class="today-panel">
+      <div class="today-title">
+        <h3>今日待处理</h3>
+        <span>{{ todayLabel }}</span>
+      </div>
+      <div class="today-grid">
+        <button v-for="item in todayTodos" :key="item.label" class="today-card" @click="router.push(item.path)">
+          <div class="metric-icon">
+            <el-icon><component :is="item.icon" /></el-icon>
+          </div>
+          <div>
+            <strong>{{ item.value }}</strong>
+            <span>{{ item.label }}</span>
+          </div>
+        </button>
+      </div>
+    </section>
+
     <section class="main-grid">
       <div class="panel task-panel">
         <div class="panel-header">
@@ -252,8 +270,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Collection, DataLine, Document, Finished, Refresh, School, TrendCharts, User } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { Collection, DataLine, Document, Finished, Refresh, School, Timer, TrendCharts, User } from '@element-plus/icons-vue'
 import { getTeacherStatistics, type TeacherStatistics, type TeacherTaskProgress } from '@/api/teacher'
 
 const router = useRouter()
@@ -307,6 +325,30 @@ const kpiCards = computed(() => [
   { label: '及格率', value: formatPercent(statistics.overview.passRate), icon: DataLine }
 ])
 
+const todayLabel = computed(() => new Date().toLocaleDateString('zh-CN', {
+  month: '2-digit',
+  day: '2-digit',
+  weekday: 'short'
+}))
+
+const todayTodos = computed(() => {
+  const tasks = statistics.recentTasks || []
+  const pendingHomeworkGrade = tasks
+    .filter(item => item.type === 'HOMEWORK')
+    .reduce((sum, item) => sum + Number(item.pendingGradeCount || 0), 0)
+  const pendingExamGrade = tasks
+    .filter(item => item.type === 'EXAM')
+    .reduce((sum, item) => sum + Number(item.pendingGradeCount || 0), 0)
+  const missingCount = tasks
+    .reduce((sum, item) => sum + Math.max(Number(item.totalStudents || 0) - Number(item.submittedCount || 0), 0), 0)
+  return [
+    { label: '作业待批', value: pendingHomeworkGrade, icon: Document, path: '/teacher/homework' },
+    { label: '考试待批', value: pendingExamGrade, icon: Collection, path: '/teacher/exams' },
+    { label: '未交/未完成', value: missingCount, icon: User, path: '/teacher/statistics' },
+    { label: '今日截止', value: countDueToday(tasks), icon: Timer, path: '/teacher/homework' }
+  ]
+})
+
 async function fetchStatistics() {
   loading.value = true
   try {
@@ -344,6 +386,11 @@ function formatDateTime(value?: string) {
   return value.replace('T', ' ').slice(0, 16)
 }
 
+function countDueToday(tasks: TeacherTaskProgress[]) {
+  const today = new Date().toISOString().slice(0, 10)
+  return tasks.filter(item => (item.deadline || '').slice(0, 10) === today).length
+}
+
 onMounted(fetchStatistics)
 </script>
 
@@ -365,14 +412,14 @@ onMounted(fetchStatistics)
 
 .stats-header h2 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 24px;
   letter-spacing: 0;
 }
 
 .stats-header p {
   margin: 6px 0 0;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -393,11 +440,76 @@ onMounted(fetchStatistics)
 }
 
 .metric-card,
+.today-panel,
 .panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 20, 40, 0.74);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  box-shadow: var(--card-shadow);
   backdrop-filter: blur(14px);
+}
+
+.today-panel {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.today-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.today-title h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.today-title span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.today-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.today-card:hover {
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
+}
+
+.today-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.today-card span {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .metric-card {
@@ -415,12 +527,12 @@ onMounted(fetchStatistics)
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: rgba(64, 128, 255, 0.12);
-  color: #8bb5ff;
+  background: var(--primary-dim);
+  color: var(--primary-light);
 }
 
 .metric-value {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 25px;
   font-weight: 700;
@@ -429,7 +541,7 @@ onMounted(fetchStatistics)
 
 .metric-label {
   margin-top: 7px;
-  color: rgba(226, 232, 240, 0.58);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -467,13 +579,13 @@ onMounted(fetchStatistics)
 
 .panel-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 15px;
   letter-spacing: 0;
 }
 
 .panel-header span {
-  color: rgba(226, 232, 240, 0.48);
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -485,9 +597,9 @@ onMounted(fetchStatistics)
 .task-row,
 .survey-row {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
-  color: inherit;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+  color: var(--text-primary);
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease;
 }
@@ -504,8 +616,8 @@ onMounted(fetchStatistics)
 
 .task-row:hover,
 .survey-row:hover {
-  border-color: rgba(64, 128, 255, 0.32);
-  background: rgba(64, 128, 255, 0.08);
+  border-color: var(--primary-border);
+  background: var(--surface-hover);
 }
 
 .task-title {
@@ -513,7 +625,7 @@ onMounted(fetchStatistics)
   align-items: center;
   gap: 8px;
   min-width: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -530,7 +642,7 @@ onMounted(fetchStatistics)
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: rgba(226, 232, 240, 0.52);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -544,7 +656,7 @@ onMounted(fetchStatistics)
 }
 
 .progress-top strong {
-  color: #bfdbfe;
+  color: var(--primary-light);
   font-weight: 700;
 }
 
@@ -562,14 +674,14 @@ onMounted(fetchStatistics)
   grid-template-columns: 54px minmax(0, 1fr) 34px;
   gap: 10px;
   align-items: center;
-  color: rgba(226, 232, 240, 0.72);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .bar-track {
   height: 9px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-muted);
   overflow: hidden;
 }
 
@@ -594,18 +706,18 @@ onMounted(fetchStatistics)
 .survey-summary div {
   padding: 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-muted);
 }
 
 .survey-summary strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 22px;
 }
 
 .survey-summary span {
-  color: rgba(226, 232, 240, 0.54);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -629,12 +741,12 @@ onMounted(fetchStatistics)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .survey-row em {
   flex-shrink: 0;
-  color: rgba(226, 232, 240, 0.55);
+  color: var(--text-secondary);
   font-style: normal;
   font-size: 12px;
 }
@@ -653,9 +765,9 @@ onMounted(fetchStatistics)
   justify-content: space-between;
   gap: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-muted);
 }
 
 .trend-meta,
@@ -667,7 +779,7 @@ onMounted(fetchStatistics)
 .weak-main strong {
   display: block;
   overflow: hidden;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -679,7 +791,7 @@ onMounted(fetchStatistics)
 .weak-rate em {
   display: block;
   margin-top: 5px;
-  color: rgba(226, 232, 240, 0.5);
+  color: var(--text-secondary);
   font-size: 12px;
   font-style: normal;
 }
@@ -692,7 +804,7 @@ onMounted(fetchStatistics)
 
 .trend-score span,
 .weak-rate span {
-  color: #bfdbfe;
+  color: var(--primary-light);
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
 }
@@ -707,18 +819,18 @@ onMounted(fetchStatistics)
 .ai-grid div {
   padding: 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-muted);
 }
 
 .ai-grid strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 21px;
 }
 
 .ai-grid span {
-  color: rgba(226, 232, 240, 0.54);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -730,13 +842,13 @@ onMounted(fetchStatistics)
 .topic-row span {
   min-width: 0;
   overflow: hidden;
-  color: rgba(226, 232, 240, 0.78);
+  color: var(--text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .topic-row em {
-  color: #bfdbfe;
+  color: var(--primary-light);
   font-family: 'JetBrains Mono', monospace;
   font-style: normal;
 }

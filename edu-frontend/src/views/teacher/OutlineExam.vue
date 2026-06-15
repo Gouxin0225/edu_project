@@ -140,7 +140,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type UploadFile } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { COURSE_CATEGORIES, DIFFICULTIES, QUESTION_TYPES, type CourseCategory, type Difficulty, type QuestionType } from '@/api/question'
 import { getMyClasses, type ClassInfo } from '@/api/exam'
@@ -331,7 +333,7 @@ getMyClasses().then(res => {
 .page-header h2 {
   margin: 0;
   font-size: 24px;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .page-header p {
@@ -365,7 +367,7 @@ getMyClasses().then(res => {
 
 .doc-title {
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .upload-icon {
@@ -387,7 +389,7 @@ getMyClasses().then(res => {
 }
 
 .outline-page :deep(.el-form-item__content) {
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .outline-page :deep(.el-upload) {

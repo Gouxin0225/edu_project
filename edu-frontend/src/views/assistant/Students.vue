@@ -192,7 +192,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { getMyClasses, getStudentList, getTeacherStatistics, type StudentRecord, type TeacherClass, type TeacherRiskStudent } from '@/api/teacher'
@@ -422,14 +422,14 @@ onMounted(loadData)
 
 .page-header h2 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 24px;
   letter-spacing: 0;
 }
 
 .page-header p {
   margin: 6px 0 0;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -443,10 +443,10 @@ onMounted(loadData)
 .summary-card,
 .table-panel,
 .detail-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(12, 20, 40, 0.74);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
 }
 
 .filter-panel,
@@ -465,7 +465,7 @@ onMounted(loadData)
 
 .summary-card strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
 }
@@ -474,7 +474,7 @@ onMounted(loadData)
 .student-cell span,
 .visit-cell span,
 .muted {
-  color: rgba(226, 232, 240, 0.54);
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -486,7 +486,7 @@ onMounted(loadData)
 
 .student-cell strong,
 .visit-cell strong {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .reason-list {
@@ -505,12 +505,12 @@ onMounted(loadData)
 .detail-card h3,
 .detail-card h4 {
   margin: 0 0 10px;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .detail-card p,
 .detail-visit span {
-  color: rgba(226, 232, 240, 0.62);
+  color: var(--text-secondary);
 }
 
 .metric-row {
@@ -518,12 +518,12 @@ onMounted(loadData)
 }
 
 .metric-row strong {
-  color: #fbbf24;
+  color: #ff9800;
   margin-right: 12px;
 }
 
 .detail-visit {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
   padding: 10px 0;
   display: grid;
   gap: 8px;
@@ -532,11 +532,11 @@ onMounted(loadData)
 .student-follow :deep(.el-table) {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: rgba(15, 23, 42, 0.92);
-  --el-table-header-text-color: #cbd5e1;
-  --el-table-text-color: #e5e7eb;
-  --el-table-border-color: rgba(148, 163, 184, 0.14);
-  --el-table-row-hover-bg-color: rgba(64, 128, 255, 0.08);
+  --el-table-header-bg-color: var(--bg-base);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-text-color: var(--text-primary);
+  --el-table-border-color: var(--border-subtle);
+  --el-table-row-hover-bg-color: var(--surface-hover);
 }
 
 .student-follow :deep(.el-table th.el-table__cell),

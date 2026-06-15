@@ -59,10 +59,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import request from '@/utils/request'
 import { useUserStore } from '@/stores/user'
 
@@ -79,7 +79,7 @@ watch(visible, (v) => emit('update:visible', v))
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
-const force = props.force
+const force = computed(() => props.force)
 
 const form = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
@@ -129,8 +129,8 @@ function handleClosed() {
 
 <style scoped>
 .cyberpunk-dialog {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .force-alert {
@@ -138,14 +138,14 @@ function handleClosed() {
 }
 
 :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 30px rgba(255, 16, 240, 0.15);
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
 }
 
 :deep(.el-dialog__header) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.el-dialog__title) {
@@ -155,32 +155,32 @@ function handleClosed() {
 }
 
 :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-dialog__footer) {
-  border-top: 1px solid #1a1a2e !important;
+  border-top: 1px solid var(--border) !important;
 }
 
 .cyberpunk-form-item :deep(.el-form-item__label) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-input :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border) !important;
   box-shadow: none !important;
 }
 
 .cyberpunk-input :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-input :deep(.el-input__inner::placeholder) {
-  color: #666 !important;
+  color: var(--text-muted) !important;
 }
 
 .cyberpunk-input :deep(.el-input__wrapper:focus) {
@@ -189,13 +189,13 @@ function handleClosed() {
 }
 
 :deep(.el-input__suffix) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
 }
 
 .cancel-btn {
   background: transparent !important;
-  border: 1px solid #666 !important;
-  color: #909090 !important;
+  border: 1px solid var(--text-muted) !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
 }

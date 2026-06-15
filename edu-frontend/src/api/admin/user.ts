@@ -69,7 +69,7 @@ export interface ResetPasswordResult {
   message: string
 }
 
-export const getUserList = (params: { page: number; size: number; role?: string }) =>
+export const getUserList = (params: { page: number; size: number; role?: string; keyword?: string }) =>
   request.get<any, { code: number; data: UserListResult }>('/admin/user/list', { params })
 
 export const getUserStats = () =>

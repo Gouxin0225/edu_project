@@ -59,4 +59,16 @@ public class StudentAnswerDetail implements Serializable {
      */
     @TableField("score_gained")
     private BigDecimal scoreGained;
+
+    /**
+     * AI建议得分
+     */
+    @TableField("ai_suggest_score")
+    private BigDecimal aiSuggestScore;
+
+    /**
+     * AI建议详情(JSON)
+     */
+    @TableField("ai_suggest_detail")
+    private String aiSuggestDetail;
 }

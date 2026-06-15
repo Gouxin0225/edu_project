@@ -25,4 +25,19 @@
         id, course_category, knowledge_point, type, difficulty, content, options_json, standard_answer, analysis, creator_id, is_ai_generated, is_public, create_time, is_deleted
     </sql>
 
+    <select id="selectByIdIncludingDeleted" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM question_bank
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIdsIncludingDeleted" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM question_bank
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
 </mapper>

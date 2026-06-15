@@ -62,7 +62,7 @@
           <span>按未交和待批排序</span>
         </div>
         <div class="task-list">
-          <div v-for="task in warningTasks" :key="task.taskId" class="task-row">
+          <button v-for="task in warningTasks" :key="task.taskId" class="task-row task-button" @click="goTaskDetail(task)">
             <div>
               <strong>{{ task.title }}</strong>
               <span>{{ task.type === 'EXAM' ? '考试' : '作业' }} · 截止 {{ formatTime(task.deadline) }}</span>
@@ -71,7 +71,7 @@
               <el-tag type="warning" effect="plain">未交 {{ task.pendingCount }}</el-tag>
               <el-tag v-if="task.pendingGradeCount" type="danger" effect="plain">待批 {{ task.pendingGradeCount }}</el-tag>
             </div>
-          </div>
+          </button>
           <el-empty v-if="warningTasks.length === 0" description="暂无任务预警" :image-size="80" />
         </div>
       </div>
@@ -102,7 +102,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { ChatDotRound, Collection, Finished, Notebook, Refresh, User, Warning } from '@element-plus/icons-vue'
 import { getTeacherStatistics, type TeacherStatistics } from '@/api/teacher'
 import { getStudentVisitRecords, type StudentVisitRecord } from '@/api/studentVisit'
@@ -192,12 +192,14 @@ const todoItems = computed(() => {
     })
   }
   if (warningTasks.value.length) {
+    const hasExam = warningTasks.value.some(item => item.type === 'EXAM')
+    const hasHomework = warningTasks.value.some(item => item.type === 'HOMEWORK')
     items.push({
       key: 'tasks',
       title: '跟进任务预警',
       desc: '近期作业/考试存在未交或待批',
       count: warningTasks.value.length,
-      path: '/assistant/homework',
+      path: hasExam && !hasHomework ? '/assistant/exams' : hasHomework && !hasExam ? '/assistant/homework' : '/assistant/statistics',
       icon: Notebook
     })
   }
@@ -228,6 +230,10 @@ async function loadData() {
   } finally {
     loading.value = false
   }
+}
+
+function goTaskDetail(task: { type: string }) {
+  router.push(task.type === 'EXAM' ? '/assistant/exams' : '/assistant/homework')
 }
 
 function formatTime(value?: string | null) {
@@ -305,7 +311,7 @@ onMounted(loadData)
 .page-header h2,
 .panel-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   letter-spacing: 0;
 }
 
@@ -353,7 +359,7 @@ onMounted(loadData)
 
 .kpi-card strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
 }
@@ -385,7 +391,7 @@ onMounted(loadData)
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-muted);
   color: inherit;
   padding: 12px;
   text-align: left;
@@ -400,7 +406,13 @@ onMounted(loadData)
   cursor: pointer;
 }
 
-.todo-row:hover {
+.task-button {
+  cursor: pointer;
+  font: inherit;
+}
+
+.todo-row:hover,
+.task-button:hover {
   border-color: rgba(64, 128, 255, 0.35);
   background: rgba(64, 128, 255, 0.08);
 }
@@ -413,7 +425,7 @@ onMounted(loadData)
 .task-row strong,
 .visit-row strong {
   display: block;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .todo-row em {

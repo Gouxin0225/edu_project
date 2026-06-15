@@ -277,11 +277,11 @@
         <el-form-item label="生成数量" prop="count">
           <el-input-number
             v-model="aiForm.count"
-            :min="1" :max="20" :step="1"
+            :min="1" :max="100" :step="1"
             controls-position="right"
             style="width:140px"
           />
-          <el-text type="info" size="small" style="margin-left:8px">最多 20 题</el-text>
+          <el-text type="info" size="small" style="margin-left:8px">最多 100 题</el-text>
         </el-form-item>
       </el-form>
 
@@ -364,13 +364,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import type { FormInstance, FormRules, UploadInstance } from 'element-plus'
 import {
   Search, Refresh, Plus, Upload, Delete,
   MagicStick, InfoFilled, Download, UploadFilled, Warning, Loading
 } from '@element-plus/icons-vue'
-import * as XLSX from 'xlsx'
 import {
   QUESTION_TYPES, COURSE_CATEGORIES, DIFFICULTIES,
   getQuestionList, createQuestion, updateQuestion,
@@ -689,7 +689,8 @@ async function submitImport() {
   }
 }
 
-function downloadTemplate() {
+async function downloadTemplate() {
+  const XLSX = await import('xlsx')
   const headers = [['课程方向', '知识点', '题型', '难度', '题干', '选项A', '选项B', '选项C', '选项D', '正确答案', '解析']]
   const samples = [
     ['Java', 'try-catch', 'SINGLE', 'MEDIUM', '以下哪个关键字用于捕获异常？', 'try', 'catch', 'finally', 'throw', 'B', ''],
@@ -721,7 +722,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: #030303 !important;
+  background: var(--bg-surface) !important;
   min-height: 100vh;
   padding: 16px;
   font-family: 'JetBrains Mono', monospace !important;
@@ -729,8 +730,8 @@ onMounted(async () => {
 
 /* Cyber Card */
 .cyber-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
 }
@@ -753,9 +754,9 @@ onMounted(async () => {
 /* Cyber Buttons */
 .cyber-btn {
   font-family: 'JetBrains Mono', monospace !important;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   transition: all 0.3s ease !important;
   padding: 8px 16px !important;
@@ -802,9 +803,9 @@ onMounted(async () => {
 
 .cyber-btn-small {
   font-family: 'JetBrains Mono', monospace !important;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 }
 
@@ -843,20 +844,20 @@ onMounted(async () => {
 }
 
 .cyber-table :deep(.el-table__header-wrapper th) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-weight: 600 !important;
 }
 
 .cyber-table :deep(.el-table__body-wrapper tr) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .cyber-table :deep(.el-table__body-wrapper td) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-table :deep(.el-table__body-wrapper tr:hover > td) {
@@ -864,7 +865,7 @@ onMounted(async () => {
 }
 
 .cyber-table :deep(.el-table--border .el-table__cell) {
-  border-right: 1px solid #1a1a2e !important;
+  border-right: 1px solid var(--border) !important;
 }
 
 /* Cyber Tags */
@@ -892,13 +893,13 @@ onMounted(async () => {
 }
 
 .cyber-pagination :deep(.el-pagination__total) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pager li) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -914,13 +915,13 @@ onMounted(async () => {
 }
 
 .cyber-pagination :deep(.el-pagination__jump) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pagination .el-pagination__editor) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
 }
 
 /* Cyber Dialog */
@@ -929,14 +930,14 @@ onMounted(async () => {
 }
 
 .cyber-dialog :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.2), 0 0 60px rgba(255, 16, 240, 0.1) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__header) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__title) {
@@ -946,12 +947,12 @@ onMounted(async () => {
 }
 
 .cyber-dialog :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__footer) {
-  border-top: 1px solid #1a1a2e !important;
+  border-top: 1px solid var(--border) !important;
 }
 
 /* Form Items */
@@ -966,13 +967,13 @@ onMounted(async () => {
 
 /* Inputs */
 .cyber-dialog :deep(.el-input__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: none !important;
 }
 
 .cyber-dialog :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -992,9 +993,9 @@ onMounted(async () => {
 
 /* Textarea */
 .cyber-dialog :deep(.el-textarea__inner) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -1009,10 +1010,10 @@ onMounted(async () => {
 
 /* Select */
 .cyber-dialog :deep(.el-select__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: none !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-dialog :deep(.el-select__wrapper:hover) {
@@ -1025,12 +1026,12 @@ onMounted(async () => {
 }
 
 .cyber-dialog :deep(.el-select__dropdown) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .cyber-dialog :deep(.el-select-dropdown__item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-dialog :deep(.el-select-dropdown__item:hover) {
@@ -1040,12 +1041,12 @@ onMounted(async () => {
 
 /* Input Number */
 .cyber-dialog :deep(.el-input-number__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .cyber-dialog :deep(.el-input-number__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -1057,7 +1058,7 @@ onMounted(async () => {
 
 .cyber-radio {
   font-family: 'JetBrains Mono', monospace !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-dialog :deep(.el-radio__input.is-checked .el-radio__inner) {
@@ -1071,8 +1072,8 @@ onMounted(async () => {
 }
 
 .cyber-dialog :deep(.el-radio__inner) {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
 }
 
 /* Checkbox */
@@ -1084,7 +1085,7 @@ onMounted(async () => {
 
 .cyber-checkbox {
   font-family: 'JetBrains Mono', monospace !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-dialog :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
@@ -1098,8 +1099,8 @@ onMounted(async () => {
 }
 
 .cyber-dialog :deep(.el-checkbox__inner) {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
 }
 
 /* Option Row */
@@ -1125,7 +1126,7 @@ onMounted(async () => {
   -webkit-line-clamp: 2;
   overflow: hidden;
   font-size: 13px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .text-muted { color: rgba(224, 224, 224, 0.4) !important; }
@@ -1168,7 +1169,7 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   margin-bottom: 12px;
 }
 
@@ -1184,8 +1185,8 @@ onMounted(async () => {
 
 /* Upload */
 .cyber-upload :deep(.el-upload-dragger) {
-  background: #0a0a0a !important;
-  border: 2px dashed #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 2px dashed var(--border) !important;
   border-radius: 0 !important;
 }
 
@@ -1195,7 +1196,7 @@ onMounted(async () => {
 }
 
 .cyber-upload :deep(.el-upload__text) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -1206,21 +1207,21 @@ onMounted(async () => {
 
 /* Divider */
 .cyber-divider {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 /* Descriptions */
 .cyber-descriptions :deep(.el-descriptions__label) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   color: #00ffff !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions__content) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -1249,7 +1250,7 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   padding: 3px 0;
 }
 
@@ -1260,11 +1261,11 @@ onMounted(async () => {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
   border-radius: 0 !important;
 }
 
@@ -1274,8 +1275,8 @@ onMounted(async () => {
 
 /* Element Plus Override - Global */
 :deep(.el-message-box) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 :deep(.el-message-box__title) {
@@ -1283,7 +1284,7 @@ onMounted(async () => {
 }
 
 :deep(.el-message-box__message) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-overlay) {
@@ -1291,8 +1292,8 @@ onMounted(async () => {
 }
 
 :deep(.el-select-dropdown__item) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-select-dropdown__item.hover),
@@ -1305,12 +1306,12 @@ onMounted(async () => {
 }
 
 :deep(.el-popper.is-light) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 :deep(.el-popper.is-light .el-popper__arrow::before) {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
 }
 </style>

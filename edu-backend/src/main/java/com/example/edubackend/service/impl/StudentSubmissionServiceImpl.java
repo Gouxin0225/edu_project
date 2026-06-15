@@ -13,6 +13,7 @@ import com.example.edubackend.entity.SysUser;
 import com.example.edubackend.entity.ClassStudentRel;
 import com.example.edubackend.exception.BusinessException;
 import com.example.edubackend.mapper.AssessmentTaskMapper;
+import com.example.edubackend.mapper.QuestionBankMapper;
 import com.example.edubackend.mapper.StudentSubmissionMapper;
 import com.example.edubackend.mapper.SysClassMapper;
 import com.example.edubackend.mapper.SysUserMapper;
@@ -36,9 +37,9 @@ import java.util.*;
 public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionMapper, StudentSubmission> implements IStudentSubmissionService {
 
     private final IStudentAnswerDetailService answerDetailService;
-    private final IQuestionBankService questionBankService;
     private final ITaskQuestionRelService taskQuestionRelService;
     private final AssessmentTaskMapper assessmentTaskMapper;
+    private final QuestionBankMapper questionBankMapper;
     private final SysUserMapper sysUserMapper;
     private final SysClassMapper sysClassMapper;
     private final ClassStudentRelMapper classStudentRelMapper;
@@ -47,11 +48,15 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
 
     @Override
     public List<SubmissionListVO> getSubmissionList(Long examId) {
-        List<StudentSubmission> submissions = list(
+        List<StudentSubmission> allSubmissions = list(
                 new LambdaQueryWrapper<StudentSubmission>()
                         .eq(StudentSubmission::getTaskId, examId)
-                        .orderByDesc(StudentSubmission::getSubmitTime)
         );
+        List<StudentSubmission> submissions = new ArrayList<>(latestSubmissionByStudent(allSubmissions).values());
+        submissions.sort(Comparator
+                .comparing(this::submissionActivityTime, Comparator.nullsLast(LocalDateTime::compareTo))
+                .reversed()
+                .thenComparing(StudentSubmission::getId, Comparator.nullsLast(Long::compareTo)));
 
         List<SubmissionListVO> result = new ArrayList<>();
         for (StudentSubmission s : submissions) {
@@ -99,7 +104,7 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
         }
         
         if (submission.getSubmitTime() != null) {
-            vo.setSubmitTime(submission.getSubmitTime().toString().replace('T', ' ').substring(0, 19));
+            vo.setSubmitTime(formatTime(submission.getSubmitTime()));
         }
         vo.setGradeTime(null);
 
@@ -144,6 +149,8 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
                     qvo.setIsCorrect(answer.getIsCorrect() == 1);
                 }
                 qvo.setScoreGained(answer.getScoreGained());
+                qvo.setAiSuggestScore(answer.getAiSuggestScore());
+                qvo.setAiSuggestDetail(answer.getAiSuggestDetail());
             }
 
             answerVOList.add(qvo);
@@ -166,8 +173,10 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
             throw new BusinessException(404, "提交记录不存在");
         }
 
-        if (!"SUBMITTED".equals(submission.getStatus())) {
-            throw new BusinessException(400, "只能批改已提交的答卷");
+        if (!"SUBMITTED".equals(submission.getStatus())
+                && !"GRADED".equals(submission.getStatus())
+                && !"RETURNED".equals(submission.getStatus())) {
+            throw new BusinessException(400, "只能批改已提交或已批改的答卷");
         }
 
         BigDecimal totalScore = BigDecimal.ZERO;
@@ -184,12 +193,26 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
                             .eq(StudentAnswerDetail::getQuestionId, item.getQuestionId())
             );
 
+            Integer fullScore = questionScoreMap.get(item.getQuestionId());
+            if (fullScore == null) {
+                throw new BusinessException(400, "题目不属于当前试卷: " + item.getQuestionId());
+            }
+            if (item.getScoreGained() == null) {
+                throw new BusinessException(400, "题目分数不能为空: " + item.getQuestionId());
+            }
+            if (item.getScoreGained().compareTo(BigDecimal.ZERO) < 0
+                    || item.getScoreGained().compareTo(BigDecimal.valueOf(fullScore)) > 0) {
+                throw new BusinessException(400, "题目分数超出范围: " + item.getQuestionId());
+            }
             if (answer == null) {
-                throw new BusinessException(404, "答题记录不存在: " + item.getQuestionId());
+                answer = new StudentAnswerDetail();
+                answer.setSubmissionId(submissionId);
+                answer.setQuestionId(item.getQuestionId());
             }
 
             answer.setScoreGained(item.getScoreGained());
-            Integer fullScore = questionScoreMap.get(item.getQuestionId());
+            answer.setAiSuggestScore(item.getAiSuggestScore());
+            answer.setAiSuggestDetail(item.getAiSuggestDetail());
             if (item.getScoreGained() != null && item.getScoreGained().compareTo(BigDecimal.ZERO) > 0) {
                 if (fullScore != null && item.getScoreGained().compareTo(BigDecimal.valueOf(fullScore)) < 0) {
                     answer.setIsCorrect((byte) 2);
@@ -199,7 +222,7 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
             } else {
                 answer.setIsCorrect((byte) 0);
             }
-            answerDetailService.updateById(answer);
+            answerDetailService.saveOrUpdate(answer);
 
             totalScore = totalScore.add(item.getScoreGained() != null ? item.getScoreGained() : BigDecimal.ZERO);
         }
@@ -217,8 +240,13 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
                         .eq(StudentSubmission::getTaskId, examId)
         );
 
+        boolean hasPendingGrade = submissions.stream().anyMatch(s -> "SUBMITTED".equals(s.getStatus()));
+        if (hasPendingGrade) {
+            throw new BusinessException(400, "仍有待批改答卷，不能发布成绩");
+        }
+
         for (StudentSubmission s : submissions) {
-            if (!"GRADED".equals(s.getStatus()) && !"SUBMITTED".equals(s.getStatus())) {
+            if (!"GRADED".equals(s.getStatus())) {
                 continue;
             }
             s.setStatus("GRADED");
@@ -341,6 +369,8 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
                 qvo.setStudentAnswer(answer.getStudentAnswer());
                 qvo.setIsCorrect(answer.getIsCorrect() != null ? answer.getIsCorrect() == 1 : null);
                 qvo.setScoreGained(answer.getScoreGained());
+                qvo.setAiSuggestScore(answer.getAiSuggestScore());
+                qvo.setAiSuggestDetail(answer.getAiSuggestDetail());
             }
 
             answerVOList.add(qvo);
@@ -362,7 +392,7 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
         if (questionIds.isEmpty()) {
             return Map.of();
         }
-        List<QuestionBank> questions = questionBankService.listByIds(questionIds);
+        List<QuestionBank> questions = questionBankMapper.selectBatchIdsIncludingDeleted(questionIds);
         Map<Long, QuestionBank> questionMap = new HashMap<>();
         for (QuestionBank question : questions) {
             if (question.getId() != null) {
@@ -374,41 +404,72 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
 
     @Override
     public List<ScoreExportDTO> getExportData(Long examId) {
-        AssessmentTask exam = assessmentTaskMapper.selectById(examId);
-        if (exam == null) {
-            throw new BusinessException(404, "考试不存在");
-        }
-        if (!"EXAM".equals(exam.getType())) {
-            throw new BusinessException(400, "任务不是考试");
-        }
+        AssessmentTask exam = getExamForExport(examId);
         BigDecimal passScore = BigDecimal.valueOf(examSettingHelper.getPassScore(exam));
 
-        List<StudentSubmission> submissions = list(
-                new LambdaQueryWrapper<StudentSubmission>()
-                        .eq(StudentSubmission::getTaskId, examId)
-                        .isNotNull(StudentSubmission::getTotalScoreGained)
-        );
-
+        List<SysUser> students = getExamTargetStudents(exam);
+        Map<Long, StudentSubmission> submissionMap = latestSubmissionByStudent(examId);
         List<ScoreExportDTO> result = new ArrayList<>();
-        for (StudentSubmission s : submissions) {
+        for (SysUser student : students) {
+            StudentSubmission submission = submissionMap.get(student.getId());
             ScoreExportDTO dto = new ScoreExportDTO();
-            SysUser student = sysUserMapper.selectById(s.getStudentId());
-            if (student != null) {
-                dto.setStudentName(student.getRealName());
-                if (student.getClassId() != null) {
-                    SysClass sysClass = sysClassMapper.selectById(student.getClassId());
-                    if (sysClass != null) {
-                        dto.setClassName(sysClass.getClassName());
-                    }
-                }
+            dto.setStudentNo(student.getUsername());
+            dto.setStudentName(student.getRealName());
+            dto.setClassName(getStudentClassName(student));
+            dto.setStatus(statusLabel(submission == null ? "NOT_SUBMITTED" : submission.getStatus()));
+            dto.setExamTotalScore(exam.getTotalScore());
+            if (submission != null) {
+                dto.setTotalScore(submission.getTotalScoreGained());
+                dto.setIsPass(passLabel(submission.getTotalScoreGained(), passScore));
+                dto.setSubmitTime(formatTime(submission.getSubmitTime()));
+                dto.setSwitchScreenCount(submission.getSwitchScreenCount());
+            } else {
+                dto.setIsPass("-");
+                dto.setSubmitTime("");
             }
-            dto.setTotalScore(s.getTotalScoreGained());
-            dto.setIsPass(s.getTotalScoreGained() != null && 
-                         s.getTotalScoreGained().compareTo(passScore) >= 0 ? "是" : "否");
-            dto.setSubmitTime(s.getSubmitTime() != null ? s.getSubmitTime().toString() : "");
             result.add(dto);
         }
         return result;
+    }
+
+    @Override
+    public List<ExamAnswerDetailExportRow> getAnswerExportData(Long examId) {
+        AssessmentTask exam = getExamForExport(examId);
+        List<SysUser> students = getExamTargetStudents(exam);
+        Map<Long, StudentSubmission> submissionMap = latestSubmissionByStudent(examId);
+        Map<Long, Map<Long, StudentAnswerDetail>> answerMap = answerDetailsBySubmission(submissionMap.values());
+
+        List<TaskQuestionRel> rels = taskQuestionRelService.list(
+                new LambdaQueryWrapper<TaskQuestionRel>()
+                        .eq(TaskQuestionRel::getTaskId, examId)
+                        .orderByAsc(TaskQuestionRel::getSortOrder)
+        );
+        Map<Long, QuestionBank> questionMap = loadQuestionMap(rels);
+
+        List<ExamAnswerDetailExportRow> rows = new ArrayList<>();
+        for (SysUser student : students) {
+            StudentSubmission submission = submissionMap.get(student.getId());
+            if (rels.isEmpty()) {
+                rows.add(buildAnswerExportRow(student, submission, null, null, null, null));
+                continue;
+            }
+
+            int questionNo = 1;
+            for (TaskQuestionRel rel : rels) {
+                StudentAnswerDetail answer = null;
+                if (submission != null) {
+                    answer = answerMap.getOrDefault(submission.getId(), Map.of()).get(rel.getQuestionId());
+                }
+                rows.add(buildAnswerExportRow(
+                        student,
+                        submission,
+                        questionNo++,
+                        rel,
+                        questionMap.get(rel.getQuestionId()),
+                        answer));
+            }
+        }
+        return rows;
     }
 
     @Override
@@ -467,7 +528,7 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
             if (submission != null) {
                 vo.setStatus(submission.getStatus());
                 vo.setSubmissionId(submission.getId());
-                if (submission.getTotalScoreGained() != null) {
+                if ("GRADED".equals(submission.getStatus()) && submission.getTotalScoreGained() != null) {
                     vo.setScoreGained(submission.getTotalScoreGained().intValue());
                 }
             } else if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) {
@@ -515,12 +576,10 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
                         .eq(StudentSubmission::getTaskId, examId)
         );
 
-        Map<Long, StudentSubmission> submissionMap = new HashMap<>();
-        for (StudentSubmission s : submissions) {
-            submissionMap.put(s.getStudentId(), s);
-        }
+        Map<Long, StudentSubmission> submissionMap = latestSubmissionByStudent(submissions);
 
         List<ExamParticipationVO.StudentInfo> submitted = new ArrayList<>();
+        List<ExamParticipationVO.StudentInfo> inProgress = new ArrayList<>();
         List<ExamParticipationVO.StudentInfo> notSubmitted = new ArrayList<>();
 
         for (SysUser student : allStudents) {
@@ -530,10 +589,14 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
 
             StudentSubmission submission = submissionMap.get(student.getId());
             if (submission != null) {
-                info.setSubmitTime(submission.getSubmitTime() != null ? 
-                        submission.getSubmitTime().toString().replace('T', ' ').substring(0, 19) : null);
+                info.setStartTime(formatTimeOrNull(submission.getStartTime()));
+                info.setSubmitTime(formatTimeOrNull(submission.getSubmitTime()));
                 info.setStatus(submission.getStatus());
-                submitted.add(info);
+                if ("UN".equals(submission.getStatus())) {
+                    inProgress.add(info);
+                } else {
+                    submitted.add(info);
+                }
             } else {
                 info.setStatus("NOT_SUBMITTED");
                 notSubmitted.add(info);
@@ -541,9 +604,248 @@ public class StudentSubmissionServiceImpl extends ServiceImpl<StudentSubmissionM
         }
 
         vo.setSubmittedStudents(submitted);
+        vo.setInProgressStudents(inProgress);
         vo.setNotSubmittedStudents(notSubmitted);
 
         return vo;
+    }
+
+    private AssessmentTask getExamForExport(Long examId) {
+        AssessmentTask exam = assessmentTaskMapper.selectById(examId);
+        if (exam == null) {
+            throw new BusinessException(404, "考试不存在");
+        }
+        if (!"EXAM".equals(exam.getType())) {
+            throw new BusinessException(400, "任务不是考试");
+        }
+        return exam;
+    }
+
+    private List<SysUser> getExamTargetStudents(AssessmentTask exam) {
+        List<Long> targetClassIds = parseTargetClassIds(exam.getTargetClassIds());
+        if (targetClassIds.isEmpty()) {
+            return sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                    .eq(SysUser::getRole, "STUDENT")
+                    .eq(SysUser::getIsDeleted, (byte) 0)
+                    .orderByAsc(SysUser::getClassId)
+                    .orderByAsc(SysUser::getUsername));
+        }
+        return getStudentsInClasses(targetClassIds).stream()
+                .sorted(Comparator
+                        .comparing(SysUser::getClassId, Comparator.nullsLast(Long::compareTo))
+                        .thenComparing(SysUser::getUsername, Comparator.nullsLast(String::compareTo)))
+                .toList();
+    }
+
+    private List<Long> parseTargetClassIds(String targetClassIdsJson) {
+        if (targetClassIdsJson == null || targetClassIdsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(targetClassIdsJson, new TypeReference<List<Long>>() {})
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private Map<Long, StudentSubmission> latestSubmissionByStudent(Long examId) {
+        List<StudentSubmission> submissions = list(
+                new LambdaQueryWrapper<StudentSubmission>()
+                        .eq(StudentSubmission::getTaskId, examId)
+        );
+        return latestSubmissionByStudent(submissions);
+    }
+
+    private Map<Long, StudentSubmission> latestSubmissionByStudent(Collection<StudentSubmission> submissions) {
+        Map<Long, StudentSubmission> result = new HashMap<>();
+        for (StudentSubmission submission : submissions) {
+            if (submission.getStudentId() == null) {
+                continue;
+            }
+            result.merge(submission.getStudentId(), submission, this::latestSubmission);
+        }
+        return result;
+    }
+
+    private LocalDateTime submissionActivityTime(StudentSubmission submission) {
+        if (submission == null) {
+            return null;
+        }
+        return submission.getSubmitTime() != null ? submission.getSubmitTime() : submission.getStartTime();
+    }
+
+    private StudentSubmission latestSubmission(StudentSubmission left, StudentSubmission right) {
+        int leftVersion = left.getVersion() == null ? 0 : left.getVersion();
+        int rightVersion = right.getVersion() == null ? 0 : right.getVersion();
+        if (leftVersion != rightVersion) {
+            return leftVersion > rightVersion ? left : right;
+        }
+        LocalDateTime leftTime = left.getSubmitTime() == null ? left.getStartTime() : left.getSubmitTime();
+        LocalDateTime rightTime = right.getSubmitTime() == null ? right.getStartTime() : right.getSubmitTime();
+        if (leftTime != null && rightTime != null && !leftTime.equals(rightTime)) {
+            return leftTime.isAfter(rightTime) ? left : right;
+        }
+        if (leftTime == null && rightTime != null) {
+            return right;
+        }
+        if (leftTime != null) {
+            return left;
+        }
+        long leftId = left.getId() == null ? 0L : left.getId();
+        long rightId = right.getId() == null ? 0L : right.getId();
+        return leftId >= rightId ? left : right;
+    }
+
+    private Map<Long, Map<Long, StudentAnswerDetail>> answerDetailsBySubmission(Collection<StudentSubmission> submissions) {
+        List<Long> submissionIds = submissions.stream()
+                .map(StudentSubmission::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (submissionIds.isEmpty()) {
+            return Map.of();
+        }
+        List<StudentAnswerDetail> details = answerDetailService.list(
+                new LambdaQueryWrapper<StudentAnswerDetail>()
+                        .in(StudentAnswerDetail::getSubmissionId, submissionIds)
+        );
+        Map<Long, Map<Long, StudentAnswerDetail>> result = new HashMap<>();
+        for (StudentAnswerDetail detail : details) {
+            result.computeIfAbsent(detail.getSubmissionId(), ignored -> new HashMap<>())
+                    .put(detail.getQuestionId(), detail);
+        }
+        return result;
+    }
+
+    private ExamAnswerDetailExportRow buildAnswerExportRow(
+            SysUser student,
+            StudentSubmission submission,
+            Integer questionNo,
+            TaskQuestionRel rel,
+            QuestionBank question,
+            StudentAnswerDetail answer) {
+        ExamAnswerDetailExportRow row = new ExamAnswerDetailExportRow();
+        row.setStudentNo(student.getUsername());
+        row.setStudentName(student.getRealName());
+        row.setClassName(getStudentClassName(student));
+        row.setStatus(statusLabel(submission == null ? "NOT_SUBMITTED" : submission.getStatus()));
+        row.setTotalScore(submission == null ? null : submission.getTotalScoreGained());
+        row.setSubmitTime(submission == null ? "" : formatTime(submission.getSubmitTime()));
+        row.setQuestionNo(questionNo);
+        if (rel != null) {
+            row.setQuestionScore(rel.getScore());
+        }
+        if (question != null) {
+            row.setQuestionType(typeLabel(question.getType()));
+            row.setQuestionContent(question.getContent());
+            row.setStandardAnswer(question.getStandardAnswer());
+        }
+        if (answer != null) {
+            row.setStudentAnswer(answer.getStudentAnswer());
+            row.setScoreGained(answer.getScoreGained());
+            row.setResult(answerResultLabel(answer.getIsCorrect()));
+        } else if (submission == null || "NOT_SUBMITTED".equals(submission.getStatus())) {
+            row.setResult("未参加");
+        } else if ("UN".equals(submission.getStatus())) {
+            row.setResult("未交卷");
+        } else {
+            row.setResult("未作答");
+        }
+        return row;
+    }
+
+    private String getStudentClassName(SysUser student) {
+        LinkedHashSet<String> classNames = new LinkedHashSet<>();
+        if (student.getClassId() != null) {
+            SysClass sysClass = sysClassMapper.selectById(student.getClassId());
+            if (sysClass != null && sysClass.getClassName() != null) {
+                classNames.add(sysClass.getClassName());
+            }
+        }
+        classStudentRelMapper.selectList(new LambdaQueryWrapper<ClassStudentRel>()
+                        .eq(ClassStudentRel::getStudentId, student.getId())
+                        .eq(ClassStudentRel::getStatus, "ACTIVE"))
+                .forEach(rel -> {
+                    SysClass sysClass = sysClassMapper.selectById(rel.getClassId());
+                    if (sysClass != null && sysClass.getClassName() != null) {
+                        classNames.add(sysClass.getClassName());
+                    }
+                });
+        return String.join("、", classNames);
+    }
+
+    private String passLabel(BigDecimal score, BigDecimal passScore) {
+        if (score == null) {
+            return "-";
+        }
+        return score.compareTo(passScore) >= 0 ? "是" : "否";
+    }
+
+    private String statusLabel(String status) {
+        if ("SUBMITTED".equals(status)) {
+            return "已交卷";
+        }
+        if ("GRADED".equals(status)) {
+            return "已批改";
+        }
+        if ("RETURNED".equals(status)) {
+            return "已退回";
+        }
+        if ("UN".equals(status)) {
+            return "答题中/未交卷";
+        }
+        if ("NOT_SUBMITTED".equals(status)) {
+            return "未参加";
+        }
+        return status == null ? "" : status;
+    }
+
+    private String typeLabel(String type) {
+        if ("SINGLE".equals(type)) {
+            return "单选";
+        }
+        if ("MULTIPLE".equals(type)) {
+            return "多选";
+        }
+        if ("JUDGE".equals(type)) {
+            return "判断";
+        }
+        if ("SHORT".equals(type)) {
+            return "简答";
+        }
+        if ("CODE".equals(type)) {
+            return "编程";
+        }
+        return type == null ? "" : type;
+    }
+
+    private String answerResultLabel(Byte isCorrect) {
+        if (isCorrect == null) {
+            return "待批改";
+        }
+        if (isCorrect == 1) {
+            return "正确";
+        }
+        if (isCorrect == 2) {
+            return "部分正确";
+        }
+        return "错误";
+    }
+
+    private String formatTime(LocalDateTime time) {
+        if (time == null) {
+            return "";
+        }
+        String value = time.toString().replace('T', ' ');
+        return value.length() > 19 ? value.substring(0, 19) : value;
+    }
+
+    private String formatTimeOrNull(LocalDateTime time) {
+        return time == null ? null : formatTime(time);
     }
 
     private Set<Long> getStudentClassIds(SysUser student) {

@@ -1,6 +1,5 @@
 package com.example.edubackend.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.edubackend.context.UserContext;
 import com.example.edubackend.dto.PasswordChangeDTO;
 import com.example.edubackend.entity.SysUser;
@@ -33,7 +32,6 @@ public class UserController {
         if (user == null) {
             throw new BusinessException(404, "用户不存在");
         }
-
         if (!passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
             throw new BusinessException(400, "原密码错误");
         }

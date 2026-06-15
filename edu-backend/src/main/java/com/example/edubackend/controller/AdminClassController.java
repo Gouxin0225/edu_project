@@ -8,7 +8,7 @@ import com.example.edubackend.entity.SysClass;
 import com.example.edubackend.exception.BusinessException;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.ISysClassService;
-import com.example.edubackend.service.ITeacherClassRelService;
+import com.example.edubackend.service.OperationAuditLogService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.edubackend.dto.ClassVO;
 import jakarta.validation.Valid;
@@ -21,11 +21,14 @@ import org.springframework.web.bind.annotation.*;
 public class AdminClassController {
 
     private final ISysClassService sysClassService;
+    private final OperationAuditLogService auditLogService;
 
     @PostMapping("/class")
     @RequireRole("ADMIN")
     public Result<SysClass> createClass(@Valid @RequestBody CreateClassDTO dto) {
         SysClass sysClass = sysClassService.createClass(dto, UserContext.getUserId());
+        auditLogService.record("CLASS_CREATE", "SYS_CLASS", sysClass.getId(),
+                "创建班级 " + sysClass.getClassName());
         return Result.success(sysClass);
     }
 
@@ -47,6 +50,8 @@ public class AdminClassController {
             throw new BusinessException(400, "人员ID不能为空");
         }
         sysClassService.assignTeacher(id, dto.getTeacherId());
+        auditLogService.record("CLASS_ASSIGN_USER", "SYS_CLASS", id,
+                "班级分配人员 " + dto.getTeacherId());
         return Result.success("分配成功");
     }
 
@@ -54,6 +59,8 @@ public class AdminClassController {
     @RequireRole("ADMIN")
     public Result<Void> removeTeacher(@PathVariable Long id, @PathVariable Long teacherId) {
         sysClassService.removeTeacher(id, teacherId);
+        auditLogService.record("CLASS_REMOVE_USER", "SYS_CLASS", id,
+                "班级移除人员 " + teacherId);
         return Result.success("移除成功");
     }
 }

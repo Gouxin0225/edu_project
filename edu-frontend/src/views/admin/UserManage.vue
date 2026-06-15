@@ -20,6 +20,15 @@
       <!-- 筛选栏 + 操作按钮 -->
       <div class="toolbar">
         <div class="filter-group">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="精确搜索用户名 / 姓名 / 手机号"
+            clearable
+            style="width:260px"
+            class="cyber-input"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
           <el-select v-model="filterRole" placeholder="全部角色" clearable style="width:140px" @change="handleSearch" class="cyber-select">
             <el-option label="讲师" value="TEACHER" />
             <el-option label="班主任" value="ASSISTANT" />
@@ -64,31 +73,74 @@
       </el-table>
 ...
     <!-- 课程历史弹窗 -->
-    <el-dialog v-model="showHistoryDialog" title="学员课程历史" width="600px" class="cyber-dialog">
-      <div v-if="currentUser" class="history-header">
-        <strong>{{ currentUser.realName }}</strong> ({{ currentUser.username }})
-      </div>
-      <el-table :data="currentUser?.classHistory" border stripe size="small" class="cyber-table">
-        <el-table-column prop="className" label="班级名称" min-width="150" />
-        <el-table-column label="课程状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === '1' ? 'success' : 'info'" size="small">
-              {{ row.status === '1' ? '进行中' : '已结束' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="入班状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.joinStatus === 'ACTIVE' ? 'primary' : 'warning'" size="small">
-              {{ row.joinStatus === 'ACTIVE' ? '学习中' : '已退出' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="joinTime" label="加入时间" width="160">
-          <template #default="{ row }">{{ formatTime(row.joinTime) }}</template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!currentUser?.classHistory?.length" description="暂无历史记录" />
+    <el-dialog v-model="showHistoryDialog" title="学员课程历史" width="760px" class="cyber-dialog">
+      <template v-if="currentUser">
+        <div class="history-profile">
+          <div>
+            <div class="history-name">{{ currentUser.realName }}</div>
+            <div class="history-meta">{{ currentUser.username }}<span v-if="currentUser.phone"> / {{ currentUser.phone }}</span></div>
+          </div>
+          <el-tag v-if="currentUser.className" type="success" size="large" class="cyber-tag">当前：{{ currentUser.className }}</el-tag>
+          <el-tag v-else type="info" size="large" class="cyber-tag">当前未分配班级</el-tag>
+        </div>
+
+        <div class="history-summary">
+          <div class="history-summary-item">
+            <strong>{{ historyList.length }}</strong>
+            <span>累计班级</span>
+          </div>
+          <div class="history-summary-item active">
+            <strong>{{ activeHistoryCount }}</strong>
+            <span>学习中</span>
+          </div>
+          <div class="history-summary-item left">
+            <strong>{{ leftHistoryCount }}</strong>
+            <span>已退出</span>
+          </div>
+        </div>
+
+        <div v-if="historyList.length" class="history-timeline">
+          <div
+            v-for="item in historyList"
+            :key="`${item.classId}-${item.joinTime}`"
+            class="history-timeline-item"
+            :class="{ current: item.joinStatus === 'ACTIVE' }"
+          >
+            <div class="history-dot"></div>
+            <div class="history-card">
+              <div class="history-card-head">
+                <div>
+                  <strong>{{ item.className }}</strong>
+                  <span v-if="currentUser.classId === item.classId" class="history-current-mark">当前主班级</span>
+                </div>
+                <div class="history-tags">
+                  <el-tag :type="item.status === '1' ? 'success' : 'info'" size="small" class="cyber-tag">
+                    {{ item.status === '1' ? '班级进行中' : '班级已结束' }}
+                  </el-tag>
+                  <el-tag :type="item.joinStatus === 'ACTIVE' ? 'primary' : 'warning'" size="small" class="cyber-tag">
+                    {{ item.joinStatus === 'ACTIVE' ? '学习中' : '已退出' }}
+                  </el-tag>
+                </div>
+              </div>
+              <div class="history-time-grid">
+                <div>
+                  <span>加入时间</span>
+                  <strong>{{ formatTime(item.joinTime) }}</strong>
+                </div>
+                <div>
+                  <span>退出时间</span>
+                  <strong>{{ item.leaveTime ? formatTime(item.leaveTime) : '-' }}</strong>
+                </div>
+                <div>
+                  <span>学习周期</span>
+                  <strong>{{ historyDuration(item.joinTime, item.leaveTime) }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="暂无历史记录" />
+      </template>
       <template #footer>
         <el-button @click="showHistoryDialog = false" class="cyber-btn">关闭</el-button>
       </template>
@@ -242,13 +294,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import type { FormInstance, FormRules, UploadInstance, UploadFile } from 'element-plus'
 import {
   Search, Plus, Upload, CopyDocument, UploadFilled, Warning,
   User, UserFilled, Avatar, Reading, InfoFilled, Download
 } from '@element-plus/icons-vue'
-import * as XLSX from 'xlsx'
 import {
   getUserList, getUserStats, createUser, batchImportUsers,
   resetPassword, deleteUser
@@ -273,10 +325,16 @@ async function fetchStats() {
 // ---------- 列表 ----------
 const tableData = ref<UserRecord[]>([])
 const tableLoading = ref(false)
+const searchKeyword = ref('')
 const filterRole = ref('')
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 const showHistoryDialog = ref(false)
 const currentUser = ref<UserRecord | null>(null)
+const historyList = computed(() => (currentUser.value?.classHistory || [])
+  .slice()
+  .sort((left, right) => Date.parse(right.joinTime || '') - Date.parse(left.joinTime || '')))
+const activeHistoryCount = computed(() => historyList.value.filter(item => item.joinStatus === 'ACTIVE').length)
+const leftHistoryCount = computed(() => historyList.value.filter(item => item.joinStatus !== 'ACTIVE').length)
 
 async function fetchList() {
   tableLoading.value = true
@@ -284,7 +342,8 @@ async function fetchList() {
     const res = await getUserList({
       page: pagination.page,
       size: pagination.size,
-      role: filterRole.value || undefined
+      role: filterRole.value || undefined,
+      keyword: searchKeyword.value.trim() || undefined
     })
     tableData.value = res.data.records
     pagination.total = res.data.total
@@ -317,6 +376,15 @@ const roleTagType = (role: string): '' | 'success' | 'warning' | 'danger' | 'inf
   ({ ADMIN: 'danger', TEACHER: 'success', ASSISTANT: 'warning', STUDENT: '' }[role] as any ?? 'info')
 
 const formatTime = (t: string) => t ? t.replace('T', ' ').slice(0, 19) : '-'
+
+function historyDuration(joinTime?: string, leaveTime?: string) {
+  if (!joinTime) return '-'
+  const start = Date.parse(joinTime.replace(' ', 'T'))
+  const end = leaveTime ? Date.parse(leaveTime.replace(' ', 'T')) : Date.now()
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '-'
+  const days = Math.max(1, Math.ceil((end - start) / 86400000))
+  return leaveTime ? `${days} 天` : `${days} 天至今`
+}
 
 // ---------- 创建用户 ----------
 const showCreateDialog = ref(false)
@@ -398,7 +466,8 @@ function copyPwd(pwd: string) {
 }
 
 // ---------- 下载导入模板 ----------
-function downloadTemplate() {
+async function downloadTemplate() {
+  const XLSX = await import('xlsx')
   const headers = [['用户名', '真实姓名', '手机号', '所属学校', '角色']]
   const samples = [
     ['teacher001', '张讲师', '13900000001', '博瑞教育', 'TEACHER'],
@@ -466,7 +535,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 16px;
   font-family: 'JetBrains Mono', monospace !important;
-  background: #0a0a0a;
+  background: var(--bg-surface);
   min-height: 100vh;
   padding: 16px;
 }
@@ -477,8 +546,8 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1), inset 0 0 20px rgba(0, 255, 255, 0.02) !important;
@@ -512,15 +581,15 @@ onMounted(() => {
 
 .stat-label {
   font-size: 13px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   margin-top: 4px;
   opacity: 0.8;
 }
 
 /* 主卡片 */
 .main-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.1), inset 0 0 30px rgba(0, 255, 255, 0.02) !important;
@@ -633,15 +702,15 @@ onMounted(() => {
   --el-table-tr-bg-color: transparent !important;
   --el-table-header-bg-color: rgba(0, 255, 255, 0.05) !important;
   --el-table-row-hover-bg-color: rgba(0, 255, 255, 0.03) !important;
-  --el-table-border-color: #1a1a2e !important;
+  --el-table-border-color: var(--border-subtle) !important;
   --el-table-header-text-color: #00ffff !important;
-  --el-table-text-color: #e0e0e0 !important;
-  border: 1px solid #1a1a2e !important;
+  --el-table-text-color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .cyber-table :deep(.el-table__header-wrapper th) {
   background: rgba(0, 255, 255, 0.08) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   font-weight: 600 !important;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -652,7 +721,7 @@ onMounted(() => {
 }
 
 .cyber-table :deep(.el-table__body-wrapper td) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   background: transparent !important;
 }
 
@@ -665,7 +734,7 @@ onMounted(() => {
 }
 
 .cyber-table :deep(.el-table__empty-text) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 /* Cyberpunk Tag */
@@ -680,6 +749,175 @@ onMounted(() => {
   clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 }
 
+.history-profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: rgba(0, 255, 255, 0.04);
+  margin-bottom: 14px;
+}
+
+.history-name {
+  color: #00ffff;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.history-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.history-summary-item {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-summary-item strong {
+  color: #00ffff;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.history-summary-item span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.history-summary-item.active strong {
+  color: #39ff14;
+}
+
+.history-summary-item.left strong {
+  color: #ff9800;
+}
+
+.history-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.history-timeline-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 12px;
+  position: relative;
+}
+
+.history-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 18px;
+  bottom: -8px;
+  width: 1px;
+  background: var(--border);
+}
+
+.history-timeline-item:last-child::before {
+  display: none;
+}
+
+.history-dot {
+  width: 11px;
+  height: 11px;
+  margin-top: 15px;
+  border: 2px solid #ff9800;
+  background: var(--bg-surface);
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.45);
+  z-index: 1;
+}
+
+.history-timeline-item.current .history-dot {
+  border-color: #39ff14;
+  box-shadow: 0 0 12px rgba(57, 255, 20, 0.55);
+}
+
+.history-card {
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.history-timeline-item.current .history-card {
+  border-color: rgba(57, 255, 20, 0.55);
+  background: rgba(57, 255, 20, 0.045);
+}
+
+.history-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.history-card-head strong {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.history-current-mark {
+  margin-left: 8px;
+  color: #39ff14;
+  font-size: 12px;
+}
+
+.history-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.history-time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.history-time-grid div {
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.history-time-grid span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.history-time-grid strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
 /* 分页 */
 .pagination-wrap {
   display: flex;
@@ -692,17 +930,17 @@ onMounted(() => {
 }
 
 .cyber-pagination :deep(.el-pagination__total) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pagination__sizes) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pager li) {
   background: transparent !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #1a1a2e !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
   border-radius: 0 !important;
   margin: 0 2px;
@@ -722,12 +960,12 @@ onMounted(() => {
 }
 
 .cyber-pagination :deep(.el-pagination__jump) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pagination__editor) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace !important;
   border-radius: 0 !important;
@@ -736,8 +974,8 @@ onMounted(() => {
 .cyber-pagination :deep(.btn-prev),
 .cyber-pagination :deep(.btn-next) {
   background: transparent !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   border-radius: 0 !important;
 }
 
@@ -751,8 +989,8 @@ onMounted(() => {
 /* Cyberpunk Dialog */
 .cyber-dialog {
   font-family: 'JetBrains Mono', monospace !important;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 24px, 100% 100%, 24px 100%, 0 calc(100% - 24px));
   box-shadow: 0 0 40px rgba(0, 255, 255, 0.2), 0 0 80px rgba(255, 16, 240, 0.1), inset 0 0 40px rgba(0, 255, 255, 0.02) !important;
@@ -760,7 +998,7 @@ onMounted(() => {
 
 .cyber-dialog :deep(.el-dialog__header) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(255, 16, 240, 0.05)) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 16px 20px !important;
   margin-right: 0 !important;
 }
@@ -780,7 +1018,7 @@ onMounted(() => {
 }
 
 .cyber-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-size: 18px !important;
 }
 
@@ -790,14 +1028,14 @@ onMounted(() => {
 }
 
 .cyber-dialog :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
   padding: 24px 20px !important;
 }
 
 .cyber-dialog :deep(.el-dialog__footer) {
   background: linear-gradient(135deg, rgba(255, 16, 240, 0.05), rgba(0, 255, 255, 0.02)) !important;
-  border-top: 1px solid #1a1a2e !important;
+  border-top: 1px solid var(--border) !important;
   padding: 16px 20px !important;
 }
 
@@ -823,8 +1061,8 @@ onMounted(() => {
 
 /* Cyberpunk Input & Select */
 .cyber-input :deep(.el-input__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.05) !important;
   padding: 4px 12px !important;
@@ -841,7 +1079,7 @@ onMounted(() => {
 }
 
 .cyber-input :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -850,8 +1088,8 @@ onMounted(() => {
 }
 
 .cyber-select :deep(.el-select__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.05) !important;
   min-height: 32px !important;
@@ -868,7 +1106,7 @@ onMounted(() => {
 }
 
 .cyber-select :deep(.el-select__selected-item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -878,14 +1116,14 @@ onMounted(() => {
 }
 
 .cyber-select :deep(.el-select-dropdown) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 40px rgba(255, 16, 240, 0.1) !important;
 }
 
 .cyber-select :deep(.el-select-dropdown__item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
   border-left: 2px solid transparent !important;
 }
@@ -904,14 +1142,14 @@ onMounted(() => {
 }
 
 .cyber-select :deep(.el-select-dropdown__empty) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 /* Cyberpunk Upload */
 .cyber-upload :deep(.el-upload-dragger) {
   background: rgba(0, 255, 255, 0.02) !important;
-  border: 2px dashed #1a1a2e !important;
+  border: 2px dashed var(--border) !important;
   border-radius: 0 !important;
   transition: all 0.3s ease !important;
 }
@@ -923,7 +1161,7 @@ onMounted(() => {
 }
 
 .cyber-upload :deep(.el-upload__text) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -943,35 +1181,35 @@ onMounted(() => {
 }
 
 .cyber-descriptions :deep(.el-descriptions-item__label) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
   background: rgba(0, 255, 255, 0.05) !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions-item__content) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
   background: transparent !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions__body) {
   background: transparent !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 /* Cyberpunk Divider */
 .cyber-divider {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
   background: transparent !important;
 }
 
 .cyber-divider :deep(.el-divider__text) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 /* Cyberpunk Result */
@@ -982,7 +1220,7 @@ onMounted(() => {
 }
 
 .cyber-result :deep(.el-result__subtitle p) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -997,7 +1235,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .init-pwd-label {
@@ -1015,7 +1253,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   margin-bottom: 12px;
   font-family: 'JetBrains Mono', monospace !important;
 }
@@ -1041,7 +1279,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   padding: 3px 0;
   font-family: 'JetBrains Mono', monospace !important;
 }
@@ -1096,7 +1334,7 @@ onMounted(() => {
 }
 
 :deep(.el-scrollbar__wrap) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 :deep(.el-scrollbar__thumb) {

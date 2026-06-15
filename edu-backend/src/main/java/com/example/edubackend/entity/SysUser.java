@@ -105,5 +105,6 @@ public class SysUser implements Serializable {
      * 软删除标记
      */
     @TableField("is_deleted")
+    @TableLogic
     private Byte isDeleted;
 }

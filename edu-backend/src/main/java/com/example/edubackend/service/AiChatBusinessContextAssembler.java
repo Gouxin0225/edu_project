@@ -30,15 +30,19 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
 public class AiChatBusinessContextAssembler {
 
-    private static final int MAX_CONTEXT_CHARS = 6000;
+    private static final int MAX_CONTEXT_CHARS = 12000;
     private static final int SECTION_LIMIT = 3;
     private static final int TASK_LIMIT = 5;
 
@@ -80,7 +84,7 @@ public class AiChatBusinessContextAssembler {
         boolean usedKnowledge = false;
         appendLine(context, "以下是平台业务数据检索结果，仅作为回答参考；若数据不足，请明确说明不能从平台记录中确认。");
 
-        if ("GENERAL_AI".equals(source) || ("AUTO".equals(source) && "GENERAL".equals(intent))) {
+        if ("GENERAL_AI".equals(source) || ("AUTO".equals(source) && "GENERAL".equals(intent) && !hasLearningScope(scope))) {
             return new AiChatContextResult("", intent, source, "回答来源：通用 AI；未检索平台数据或知识库，平台记录相关内容无法确认。");
         }
 
@@ -152,6 +156,13 @@ public class AiChatBusinessContextAssembler {
         return "KNOWLEDGE_QA".equals(intent) || "LEARN".equals(intent);
     }
 
+    private boolean hasLearningScope(SearchScope scope) {
+        return scope != null
+                && (StringUtils.hasText(scope.courseCategory())
+                || StringUtils.hasText(scope.knowledgePoint())
+                || containsAny(scope.question(), "是什么", "怎么", "如何", "为什么", "区别", "原理", "例子", "示例"));
+    }
+
     private void appendPlatformAccessContext(StringBuilder context, SearchScope scope, SysUser user) {
         if (isTeacherLike(user.getRole())) {
             appendManagedClassContext(context, scope, user);
@@ -170,7 +181,7 @@ public class AiChatBusinessContextAssembler {
     private void appendTeacherContext(StringBuilder context, SearchScope scope, SysUser user) {
         appendQuestionReferences(context, scope, true, user.getId());
         appendTeacherTemplates(context, scope, user.getId());
-        appendTeacherTaskSummary(context, scope, user.getId());
+        appendTeacherTaskSummary(context, scope, user);
     }
 
     private void appendManagedClassContext(StringBuilder context, SearchScope scope, SysUser user) {
@@ -575,13 +586,20 @@ public class AiChatBusinessContextAssembler {
         }
     }
 
-    private void appendTeacherTaskSummary(StringBuilder context, SearchScope scope, Long teacherId) {
+    private void appendTeacherTaskSummary(StringBuilder context, SearchScope scope, SysUser user) {
+        Set<Long> visibleClassIds = getVisibleClasses(user).stream()
+                .map(SysClass::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         List<AssessmentTask> tasks = assessmentTaskService.list(
                 new LambdaQueryWrapper<AssessmentTask>()
-                        .eq(AssessmentTask::getCreatorId, teacherId)
                         .orderByDesc(AssessmentTask::getCreateTime)
-                        .last("LIMIT " + TASK_LIMIT)
-        );
+                        .last("LIMIT 100")
+        ).stream()
+                .filter(task -> task.getIsDeleted() == null || task.getIsDeleted() == 0)
+                .filter(task -> canViewTask(task, user, visibleClassIds))
+                .limit(TASK_LIMIT)
+                .toList();
 
         int appended = 0;
         for (AssessmentTask task : tasks) {
@@ -620,8 +638,165 @@ public class AiChatBusinessContextAssembler {
                     average == null ? "暂无" : average,
                     task.getEndTime()
             ));
+            appendTaskParticipantDetails(context, task, submissions, visibleClassIds, user);
             appended++;
         }
+    }
+
+    private boolean canViewTask(AssessmentTask task, SysUser user, Set<Long> visibleClassIds) {
+        if (task == null || user == null) {
+            return false;
+        }
+        if ("ADMIN".equalsIgnoreCase(user.getRole()) || Objects.equals(task.getCreatorId(), user.getId())) {
+            return true;
+        }
+        List<Long> targetClassIds = parseTargetClassIds(task.getTargetClassIds());
+        return !visibleClassIds.isEmpty()
+                && (targetClassIds.isEmpty() || targetClassIds.stream().anyMatch(visibleClassIds::contains));
+    }
+
+    private void appendTaskParticipantDetails(
+            StringBuilder context,
+            AssessmentTask task,
+            List<StudentSubmission> submissions,
+            Set<Long> visibleClassIds,
+            SysUser user) {
+        if (task == null || submissions == null || submissions.isEmpty()) {
+            return;
+        }
+
+        Map<Long, StudentSubmission> latestByStudent = latestSubmissionByStudent(submissions);
+        List<SysUser> targetStudents = loadTargetStudents(task, visibleClassIds, user);
+        Map<Long, SysUser> studentsById = new HashMap<>();
+        for (SysUser student : targetStudents) {
+            if (student.getId() != null) {
+                studentsById.put(student.getId(), student);
+            }
+        }
+
+        List<StudentSubmission> activeSubmissions = latestByStudent.values().stream()
+                .filter(this::isActiveSubmission)
+                .sorted(Comparator
+                        .comparing(StudentSubmission::getTotalScoreGained, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(StudentSubmission::getSubmitTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(StudentSubmission::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        List<SysUser> notParticipatedStudents = targetStudents.stream()
+                .filter(student -> student.getId() != null)
+                .filter(student -> !isActiveSubmission(latestByStudent.get(student.getId())))
+                .toList();
+
+        if (activeSubmissions.isEmpty() && notParticipatedStudents.isEmpty()) {
+            return;
+        }
+
+        appendLine(context, String.format(
+                "  - 人员明细: 目标学生:%d；已参加/已提交:%d；未参加:%d；以下为已参加学生最新记录",
+                targetStudents.size(),
+                activeSubmissions.size(),
+                notParticipatedStudents.size()
+        ));
+        int detailLimit = "EXAM".equals(task.getType()) ? 30 : 20;
+        for (StudentSubmission submission : activeSubmissions.stream().limit(detailLimit).toList()) {
+            SysUser student = studentsById.get(submission.getStudentId());
+            if (student == null && submission.getStudentId() != null) {
+                student = sysUserMapper.selectById(submission.getStudentId());
+            }
+            appendLine(context, String.format(
+                    "    - 学生ID:%s；姓名:%s；账号/学号:%s；班级ID:%s；状态:%s；得分:%s；提交时间:%s；开始时间:%s",
+                    submission.getStudentId(),
+                    student == null ? "未知学生" : safeText(student.getRealName()),
+                    student == null ? "未知" : safeText(student.getUsername()),
+                    student == null || student.getClassId() == null ? "未知" : student.getClassId(),
+                    safeText(submission.getStatus()),
+                    submission.getTotalScoreGained() == null ? "暂无" : submission.getTotalScoreGained(),
+                    submission.getSubmitTime(),
+                    submission.getStartTime()
+            ));
+        }
+        if (activeSubmissions.size() > detailLimit) {
+            appendLine(context, "    - 其余已参加学生未展开，数量:" + (activeSubmissions.size() - detailLimit));
+        }
+
+        if (!notParticipatedStudents.isEmpty()) {
+            appendLine(context, "  - 未参加学生完整名单:");
+            for (SysUser student : notParticipatedStudents) {
+                appendLine(context, String.format(
+                        "    - 学生ID:%s；姓名:%s；账号/学号:%s；班级ID:%s；状态:未参加",
+                        student.getId(),
+                        safeText(student.getRealName()),
+                        safeText(student.getUsername()),
+                        student.getClassId() == null ? "未知" : student.getClassId()
+                ));
+            }
+        }
+    }
+
+    private List<SysUser> loadTargetStudents(AssessmentTask task, Set<Long> visibleClassIds, SysUser user) {
+        List<Long> targetClassIds = parseTargetClassIds(task.getTargetClassIds());
+        Set<Long> scopedClassIds = targetClassIds.isEmpty()
+                ? visibleClassIds
+                : targetClassIds.stream()
+                .filter(classId -> "ADMIN".equalsIgnoreCase(user.getRole()) || visibleClassIds.contains(classId)
+                        || Objects.equals(task.getCreatorId(), user.getId()))
+                .collect(Collectors.toSet());
+
+        LambdaQueryWrapper<SysUser> query = new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getRole, "STUDENT")
+                .orderByAsc(SysUser::getClassId)
+                .orderByAsc(SysUser::getUsername);
+        if (!scopedClassIds.isEmpty()) {
+            query.in(SysUser::getClassId, scopedClassIds);
+        } else if (!"ADMIN".equalsIgnoreCase(user.getRole()) && !Objects.equals(task.getCreatorId(), user.getId())) {
+            return Collections.emptyList();
+        }
+        query.last("LIMIT 500");
+        return sysUserMapper.selectList(query);
+    }
+
+    private Map<Long, StudentSubmission> latestSubmissionByStudent(List<StudentSubmission> submissions) {
+        Map<Long, StudentSubmission> result = new LinkedHashMap<>();
+        for (StudentSubmission submission : submissions) {
+            if (submission == null || submission.getStudentId() == null) {
+                continue;
+            }
+            result.merge(submission.getStudentId(), submission, this::latestSubmission);
+        }
+        return result;
+    }
+
+    private StudentSubmission latestSubmission(StudentSubmission left, StudentSubmission right) {
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        int leftVersion = left.getVersion() == null ? 0 : left.getVersion();
+        int rightVersion = right.getVersion() == null ? 0 : right.getVersion();
+        if (leftVersion != rightVersion) {
+            return leftVersion > rightVersion ? left : right;
+        }
+        LocalDateTime leftTime = left.getSubmitTime() != null ? left.getSubmitTime() : left.getStartTime();
+        LocalDateTime rightTime = right.getSubmitTime() != null ? right.getSubmitTime() : right.getStartTime();
+        if (leftTime != null && rightTime != null && !leftTime.equals(rightTime)) {
+            return leftTime.isAfter(rightTime) ? left : right;
+        }
+        if (left.getId() == null) {
+            return right;
+        }
+        if (right.getId() == null) {
+            return left;
+        }
+        return left.getId() > right.getId() ? left : right;
+    }
+
+    private boolean isActiveSubmission(StudentSubmission submission) {
+        return submission != null
+                && StringUtils.hasText(submission.getStatus())
+                && !"UN".equalsIgnoreCase(submission.getStatus())
+                && !"NOT_SUBMITTED".equalsIgnoreCase(submission.getStatus());
     }
 
     private boolean matchesTaskQuestions(Long taskId, SearchScope scope) {
@@ -694,10 +869,21 @@ public class AiChatBusinessContextAssembler {
         return looksLikeClassQuery(question)
                 || contains(question, "个人信息")
                 || contains(question, "我的信息")
+                || contains(question, "我是谁")
+                || contains(question, "我的班")
+                || contains(question, "我的课")
+                || contains(question, "最近")
+                || contains(question, "今日")
+                || contains(question, "今天")
+                || contains(question, "明天")
+                || contains(question, "截止")
+                || contains(question, "未完成")
+                || contains(question, "没完成")
                 || contains(question, "待完成")
                 || contains(question, "任务")
                 || contains(question, "作业")
                 || contains(question, "考试")
+                || contains(question, "测验")
                 || contains(question, "反馈")
                 || contains(question, "错题");
     }
@@ -776,19 +962,20 @@ public class AiChatBusinessContextAssembler {
             }
         }
         String question = dto == null || dto.getQuestion() == null ? "" : dto.getQuestion().toLowerCase();
-        if (containsAny(question, "成绩", "考试", "作业", "提交", "班级", "学生名单", "错题", "待完成", "得分", "排名", "反馈")) {
+        if (isPlatformInfoQuery(question)
+                || containsAny(question, "成绩", "考试", "测验", "作业", "提交", "班级", "学生名单", "错题", "待完成", "未完成", "截止", "得分", "排名", "反馈")) {
             return "PLATFORM_QUERY";
         }
-        if (containsAny(question, "知识库", "上传文档", "文档", "资料", "讲义")) {
+        if (containsAny(question, "知识库", "上传文档", "文档", "资料", "讲义", "根据资料", "根据文档", "依据资料", "依据文档")) {
             return "KNOWLEDGE_QA";
         }
-        if (containsAny(question, "生成", "出题", "选择题", "判断题", "简答题", "编程题", "练习题", "试题")) {
+        if (containsAny(question, "生成", "出题", "组卷", "命题", "选择题", "判断题", "简答题", "编程题", "练习题", "试题", "题目")) {
             return "QUESTION_GEN";
         }
-        if (containsAny(question, "改题", "优化题", "修改题", "完善解析", "评分点", "采分点", "题目质量")) {
+        if (containsAny(question, "改题", "优化题", "修改题", "完善解析", "评分点", "采分点", "题目质量", "区分度", "难度")) {
             return "QUESTION_REVIEW";
         }
-        if (containsAny(question, "讲解", "解释", "怎么理解", "为什么", "原理", "示例", "复习", "学习")) {
+        if (containsAny(question, "讲解", "解释", "是什么", "怎么理解", "怎么做", "如何", "为什么", "原理", "区别", "示例", "例子", "复习", "学习")) {
             return "LEARN";
         }
         return "GENERAL";

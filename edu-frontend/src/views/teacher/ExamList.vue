@@ -33,9 +33,16 @@
             <el-tag :type="statusType(row.status)" size="small" class="cyber-tag">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="330" fixed="right">
+        <el-table-column label="操作" width="290" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'DRAFT'" size="small" type="primary" text @click="goEdit(row)" class="cyber-btn-text">编辑</el-button>
+            <el-button
+              v-if="row.editable"
+              size="small"
+              type="primary"
+              text
+              @click="goEdit(row)"
+              class="cyber-btn-text"
+            >编辑</el-button>
             <el-button size="small" type="info" text @click="viewDetail(row)" class="cyber-btn-text">查看</el-button>
             <el-button
               v-if="row.status === 'PUBLISHED' || row.status === 'ENDED'"
@@ -53,16 +60,7 @@
               :loading="exportingId === row.id"
               @click="handleExport(row)"
               class="cyber-btn-text"
-            >导出Excel</el-button>
-            <el-button
-              size="small"
-              type="success"
-              text
-              :icon="Download"
-              :loading="exportingWordId === row.id"
-              @click="handleExportWord(row)"
-              class="cyber-btn-text"
-            >导出Word(小鹅通)</el-button>
+            >下载答题成绩</el-button>
             <el-button
               v-if="row.status === 'PUBLISHED' || row.status === 'ENDED'"
               size="small"
@@ -118,19 +116,19 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showParticipation" :title="`参考情况 - ${participationExam?.examTitle}`" width="800px" class="cyber-dialog">
-      <el-row :gutter="20" v-if="participationExam">
-        <el-col :span="12">
-          <el-card shadow="never" header="已参加" class="cyber-card-inner">
+    <el-dialog v-model="showParticipation" :title="`参考情况 - ${participationExam?.examTitle}`" width="1000px" class="cyber-dialog">
+      <el-row :gutter="16" v-if="participationExam">
+        <el-col :span="8">
+          <el-card shadow="never" header="已交卷" class="cyber-card-inner">
             <div v-if="participationExam.submittedStudents.length === 0" class="empty-tip">
-              暂无已参加学生
+              暂无已交卷学生
             </div>
             <el-table v-else :data="participationExam.submittedStudents" max-height="400" size="small" class="cyber-table">
               <el-table-column prop="studentName" label="姓名" />
               <el-table-column prop="status" label="状态">
                 <template #default="{ row }">
-                  <el-tag :type="row.status === 'GRADED' ? 'success' : 'warning'" size="small" class="cyber-tag">
-                    {{ row.status === 'GRADED' ? '已批改' : '待批改' }}
+                  <el-tag :type="participationStatusType(row.status)" size="small" class="cyber-tag">
+                    {{ participationStatusLabel(row.status) }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -138,7 +136,25 @@
             </el-table>
           </el-card>
         </el-col>
-        <el-col :span="12">
+        <el-col :span="8">
+          <el-card shadow="never" header="答题中" class="cyber-card-inner">
+            <div v-if="participationExam.inProgressStudents.length === 0" class="empty-tip">
+              暂无答题中学生
+            </div>
+            <el-table v-else :data="participationExam.inProgressStudents" max-height="400" size="small" class="cyber-table">
+              <el-table-column prop="studentName" label="姓名" />
+              <el-table-column prop="status" label="状态">
+                <template #default="{ row }">
+                  <el-tag :type="participationStatusType(row.status)" size="small" class="cyber-tag">
+                    {{ participationStatusLabel(row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="startTime" label="开始时间" />
+            </el-table>
+          </el-card>
+        </el-col>
+        <el-col :span="8">
           <el-card shadow="never" header="未参加" class="cyber-card-inner">
             <div v-if="participationExam.notSubmittedStudents.length === 0" class="empty-tip">
               暂无未参加学生
@@ -155,6 +171,14 @@
         </el-col>
       </el-row>
       <template #footer>
+        <el-button
+          :icon="Download"
+          :disabled="!participationExam?.notSubmittedStudents.length"
+          @click="exportNotSubmittedStudents"
+          class="cyber-btn-outline"
+        >
+          导出未参加名单
+        </el-button>
         <el-button @click="showParticipation = false" class="cyber-btn">关闭</el-button>
       </template>
     </el-dialog>
@@ -163,12 +187,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { Download, Plus } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { deleteExam, getExamList, getExamParticipation } from '@/api/exam'
 import type { ExamRecord, ExamParticipation } from '@/api/exam'
 import { downloadAuthorizedFile } from '@/utils/download'
+import { exportRowsToXlsx } from '@/utils/exportRows'
 
 const router = useRouter()
 
@@ -182,7 +208,6 @@ const currentExam = ref<ExamRecord | null>(null)
 const showParticipation = ref(false)
 const participationExam = ref<ExamParticipation | null>(null)
 const exportingId = ref<number | null>(null)
-const exportingWordId = ref<number | null>(null)
 
 async function fetchList() {
   tableLoading.value = true
@@ -217,22 +242,11 @@ function viewDetail(row: ExamRecord) {
 async function handleExport(row: ExamRecord) {
   exportingId.value = row.id
   try {
-    await downloadAuthorizedFile(`/api/exam/${row.id}/export-paper`, `${row.title || '考试试卷'}.xlsx`)
+    await downloadAuthorizedFile(`/api/exam/${row.id}/export`, `${row.title || '考试'}-答题成绩.xlsx`)
   } catch {
-    ElMessage.error('导出试卷失败')
+    ElMessage.error('下载答题成绩失败')
   } finally {
     exportingId.value = null
-  }
-}
-
-async function handleExportWord(row: ExamRecord) {
-  exportingWordId.value = row.id
-  try {
-    await downloadAuthorizedFile(`/api/exam/${row.id}/export-word`, `${row.title || '考试试卷'}.docx`)
-  } catch {
-    ElMessage.error('导出Word试卷失败')
-  } finally {
-    exportingWordId.value = null
   }
 }
 
@@ -248,6 +262,19 @@ async function viewParticipation(row: ExamRecord) {
   } catch {
     ElMessage.error('获取参考情况失败')
   }
+}
+
+async function exportNotSubmittedStudents() {
+  if (!participationExam.value?.notSubmittedStudents.length) return
+  await exportRowsToXlsx(
+    `${participationExam.value.examTitle}-未参加名单.xlsx`,
+    [
+      { label: '考试标题', prop: () => participationExam.value?.examTitle || '' },
+      { label: '学生姓名', prop: 'studentName' },
+      { label: '状态', prop: () => '未参加' }
+    ],
+    participationExam.value.notSubmittedStudents
+  )
 }
 
 async function handleDelete(row: ExamRecord) {
@@ -291,6 +318,28 @@ function statusType(status: string) {
   return map[status] || ''
 }
 
+function participationStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    UN: '答题中',
+    SUBMITTED: '待批改',
+    GRADED: '已批改',
+    RETURNED: '已打回',
+    NOT_SUBMITTED: '未参加'
+  }
+  return map[status] || status
+}
+
+function participationStatusType(status: string) {
+  const map: Record<string, string> = {
+    UN: 'info',
+    SUBMITTED: 'warning',
+    GRADED: 'success',
+    RETURNED: 'danger',
+    NOT_SUBMITTED: 'danger'
+  }
+  return map[status] || 'info'
+}
+
 onMounted(fetchList)
 </script>
 
@@ -301,7 +350,7 @@ onMounted(fetchList)
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: #030303 !important;
+  background: var(--bg-surface) !important;
   min-height: 100vh;
   padding: 16px;
   font-family: 'JetBrains Mono', monospace !important;
@@ -328,8 +377,8 @@ onMounted(fetchList)
 }
 
 .cyber-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px)) !important;
   font-family: 'JetBrains Mono', monospace !important;
@@ -337,20 +386,20 @@ onMounted(fetchList)
 
 .cyber-card :deep(.el-card__header) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.1) 0%, transparent 100%) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 16px 20px !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   padding: 20px !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card-inner {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 15px rgba(255, 16, 240, 0.1) !important;
   clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)) !important;
   font-family: 'JetBrains Mono', monospace !important;
@@ -358,26 +407,26 @@ onMounted(fetchList)
 
 .cyber-card-inner :deep(.el-card__header) {
   background: linear-gradient(135deg, rgba(255, 16, 240, 0.1) 0%, transparent 100%) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #ff10f0 !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card-inner :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-table {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   font-family: 'JetBrains Mono', monospace !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-table :deep(.el-table__header-wrapper th) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.15) 0%, rgba(255, 16, 240, 0.05) 100%) !important;
   color: #00ffff !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
   font-weight: 600 !important;
   letter-spacing: 1px !important;
@@ -386,14 +435,14 @@ onMounted(fetchList)
 }
 
 .cyber-table :deep(.el-table__body-wrapper tr) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-table :deep(.el-table__body-wrapper td) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -471,14 +520,14 @@ onMounted(fetchList)
 }
 
 .cyber-pagination :deep(.el-pagination__total) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-pagination :deep(.el-pager li) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -496,9 +545,9 @@ onMounted(fetchList)
 }
 
 .cyber-pagination :deep(.btn-prev), .cyber-pagination :deep(.btn-next) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.btn-prev:hover), .cyber-pagination :deep(.btn-next:hover) {
@@ -512,15 +561,15 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.2), 0 0 60px rgba(255, 16, 240, 0.1) !important;
   clip-path: polygon(0 0, calc(100% - 25px) 0, 100% 25px, 100% 100%, 25px 100%, 0 calc(100% - 25px)) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__header) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.1) 0%, rgba(255, 16, 240, 0.05) 100%) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 20px !important;
 }
 
@@ -533,30 +582,30 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
   padding: 24px !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-dialog :deep(.el-dialog__footer) {
-  background: #0a0a0a !important;
-  border-top: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-top: 1px solid var(--border) !important;
   padding: 16px 20px !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions__label) {
   background: rgba(0, 255, 255, 0.1) !important;
   color: #00ffff !important;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
   font-weight: 600 !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions__content) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -576,8 +625,8 @@ onMounted(fetchList)
 
 .cyber-dialog :deep(.el-select .el-input__wrapper),
 .cyber-dialog :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-dialog :deep(.el-select .el-input__wrapper:hover),
@@ -590,7 +639,7 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -599,9 +648,9 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-textarea__inner) {
-  background-color: #0a0a0a !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -620,8 +669,8 @@ onMounted(fetchList)
 
 .cyber-card :deep(.el-select .el-input__wrapper),
 .cyber-card :deep(.el-input-number .el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-card :deep(.el-select .el-input__wrapper:hover),
@@ -634,15 +683,15 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card :deep(.el-input-number__decrease),
 .cyber-card :deep(.el-input-number__increase) {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
   color: #00ffff !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .cyber-card :deep(.el-input-number__decrease:hover),
@@ -651,13 +700,13 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-select-dropdown) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
 }
 
 .cyber-card :deep(.el-select-dropdown__item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -672,8 +721,8 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-date-editor .el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-card :deep(.el-date-editor .el-input__wrapper:hover) {
@@ -681,10 +730,10 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-picker-panel) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -712,15 +761,15 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-time-panel) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card :deep(.el-time-spinner__item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -762,7 +811,7 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-radio__label) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -777,7 +826,7 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-checkbox__label) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -797,7 +846,7 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-switch__label) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -806,7 +855,7 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-slider__runway) {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
 }
 
 .cyber-card :deep(.el-slider__bar) {
@@ -834,17 +883,17 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-color-picker__trigger) {
-  border-color: #1a1a2e !important;
-  background: #0a0a0a !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--bg-surface) !important;
 }
 
 .cyber-card :deep(.el-color-picker__color) {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .cyber-card :deep(.el-message-box) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.2) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
@@ -855,7 +904,7 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-message-box__content) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -864,16 +913,16 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-popover.el-popper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card :deep(.el-popover.el-popper.is-light) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .cyber-card :deep(.el-popover__title) {
@@ -882,7 +931,7 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-tooltip__popper.is-dark) {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%) !important;
+  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
   border: 1px solid #00ffff !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace !important;
@@ -907,12 +956,12 @@ onMounted(fetchList)
 }
 
 .cyber-card :deep(.el-progress__text) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card :deep(.el-progress-bar__outer) {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
 }
 
 .cyber-card :deep(.el-progress-bar__inner) {
@@ -958,8 +1007,8 @@ onMounted(fetchList)
 
 .cyber-card :deep(.el-tag--info) {
   background: rgba(224, 224, 224, 0.1) !important;
-  border-color: #e0e0e0 !important;
-  color: #e0e0e0 !important;
+  border-color: var(--text-primary) !important;
+  color: var(--text-primary) !important;
   box-shadow: 0 0 8px rgba(224, 224, 224, 0.2) !important;
 }
 </style>

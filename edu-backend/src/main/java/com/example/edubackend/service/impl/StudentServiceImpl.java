@@ -42,8 +42,11 @@ public class StudentServiceImpl implements IStudentService {
         }
         
         StudentDashboardVO dashboard = new StudentDashboardVO();
+        List<StudentDashboardVO.TaskVO> todoTasks = new ArrayList<>();
         dashboard.setUpcomingTasks(new ArrayList<>());
-        dashboard.setPendingTasks(new ArrayList<>());
+        dashboard.setTodoTasks(todoTasks);
+        dashboard.setPendingTasks(todoTasks);
+        dashboard.setSubmittedTasks(new ArrayList<>());
         dashboard.setCompletedTasks(new ArrayList<>());
         
         LocalDateTime now = LocalDateTime.now();
@@ -81,21 +84,25 @@ public class StudentServiceImpl implements IStudentService {
                     dashboard.getUpcomingTasks().add(taskVO);
                 } else {
                     taskVO.setStatus("PENDING");
-                    dashboard.getPendingTasks().add(taskVO);
+                    dashboard.getTodoTasks().add(taskVO);
                 }
             } else if ("GRADED".equals(submission.getStatus())) {
                 taskVO.setStatus("COMPLETED");
                 taskVO.setScoreGained(submission.getTotalScoreGained() != null ? 
                         submission.getTotalScoreGained().intValue() : null);
                 dashboard.getCompletedTasks().add(taskVO);
-            } else {
+            } else if ("SUBMITTED".equals(submission.getStatus())) {
                 taskVO.setStatus("SUBMITTED");
-                dashboard.getPendingTasks().add(taskVO);
+                dashboard.getSubmittedTasks().add(taskVO);
+            } else {
+                taskVO.setStatus("RETURNED".equals(submission.getStatus()) ? "RETURNED" : "PENDING");
+                dashboard.getTodoTasks().add(taskVO);
             }
         }
         
         dashboard.getUpcomingTasks().sort(Comparator.comparing(StudentDashboardVO.TaskVO::getDeadline));
-        dashboard.getPendingTasks().sort(Comparator.comparing(StudentDashboardVO.TaskVO::getDeadline));
+        dashboard.getTodoTasks().sort(Comparator.comparing(StudentDashboardVO.TaskVO::getDeadline));
+        dashboard.getSubmittedTasks().sort(Comparator.comparing(StudentDashboardVO.TaskVO::getDeadline).reversed());
         dashboard.getCompletedTasks().sort(Comparator.comparing(StudentDashboardVO.TaskVO::getDeadline).reversed());
         
         return dashboard;
@@ -156,17 +163,7 @@ public class StudentServiceImpl implements IStudentService {
             return new ArrayList<>();
         }
 
-        LambdaQueryWrapper<QuestionBank> questionQuery = new LambdaQueryWrapper<QuestionBank>()
-                .in(QuestionBank::getId, questionIds);
-
-        if (knowledgePoint != null && !knowledgePoint.isEmpty()) {
-            questionQuery.like(QuestionBank::getKnowledgePoint, knowledgePoint);
-        }
-        if (questionType != null && !questionType.isEmpty()) {
-            questionQuery.eq(QuestionBank::getType, questionType);
-        }
-        
-        List<QuestionBank> questions = questionBankMapper.selectList(questionQuery);
+        List<QuestionBank> questions = questionBankMapper.selectBatchIdsIncludingDeleted(questionIds);
         Map<Long, QuestionBank> questionMap = questions.stream()
                 .collect(Collectors.toMap(QuestionBank::getId, q -> q));
         
@@ -174,6 +171,13 @@ public class StudentServiceImpl implements IStudentService {
         for (StudentMistakeBook mistake : mistakes) {
             QuestionBank question = questionMap.get(mistake.getQuestionId());
             if (question == null) continue;
+            if (knowledgePoint != null && !knowledgePoint.isEmpty()
+                    && (question.getKnowledgePoint() == null || !question.getKnowledgePoint().contains(knowledgePoint))) {
+                continue;
+            }
+            if (questionType != null && !questionType.isEmpty() && !questionType.equals(question.getType())) {
+                continue;
+            }
             
             MistakeVO vo = new MistakeVO();
             vo.setMistakeId(mistake.getId());
@@ -243,10 +247,7 @@ public class StudentServiceImpl implements IStudentService {
         int actualCount = Math.min(questionCount, availableQuestionIds.size());
         List<Long> selectedIds = availableQuestionIds.subList(0, actualCount);
         
-        List<QuestionBank> questions = questionBankMapper.selectList(
-                new LambdaQueryWrapper<QuestionBank>()
-                        .in(QuestionBank::getId, selectedIds)
-        );
+        List<QuestionBank> questions = questionBankMapper.selectBatchIdsIncludingDeleted(selectedIds);
         
         String challengeId = "CHALLENGE-" + studentId + "-" + 
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));

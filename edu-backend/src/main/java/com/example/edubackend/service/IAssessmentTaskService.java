@@ -12,6 +12,8 @@ public interface IAssessmentTaskService extends IService<AssessmentTask> {
 
     ExamVO createExam(CreateExamDTO dto, Long creatorId);
 
+    ExamVO updateExam(Long examId, CreateExamDTO dto, Long userId);
+
     void addQuestions(Long examId, List<Long> questionIds);
 
     void removeQuestion(Long examId, Long questionId);

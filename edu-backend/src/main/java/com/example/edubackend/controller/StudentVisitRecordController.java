@@ -96,6 +96,10 @@ public class StudentVisitRecordController {
         record.setVisitMethod(dto.getVisitMethod());
         record.setVisitResult(dto.getVisitResult());
         record.setContent(dto.getContent());
+        record.setProblemCategory(dto.getProblemCategory());
+        record.setConclusion(dto.getConclusion());
+        record.setAttachmentUrl(dto.getAttachmentUrl());
+        record.setIsResolved(Boolean.TRUE.equals(dto.getResolved()) || "RESOLVED".equals(dto.getVisitResult()) ? (byte) 1 : (byte) 0);
         record.setNextFollowTime(dto.getNextFollowTime());
         record.setVisitTime(dto.getVisitTime() == null ? LocalDateTime.now() : dto.getVisitTime());
         record.setCreateTime(LocalDateTime.now());
@@ -193,6 +197,10 @@ public class StudentVisitRecordController {
             vo.setVisitMethod(record.getVisitMethod());
             vo.setVisitResult(record.getVisitResult());
             vo.setContent(record.getContent());
+            vo.setProblemCategory(record.getProblemCategory());
+            vo.setConclusion(record.getConclusion());
+            vo.setAttachmentUrl(record.getAttachmentUrl());
+            vo.setResolved(record.getIsResolved() != null && record.getIsResolved() == 1);
             vo.setNextFollowTime(record.getNextFollowTime());
             vo.setVisitTime(record.getVisitTime());
             vo.setCreateTime(record.getCreateTime());

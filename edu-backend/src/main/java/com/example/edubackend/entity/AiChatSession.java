@@ -37,6 +37,9 @@ public class AiChatSession implements Serializable {
     @TableField("knowledge_point")
     private String knowledgePoint;
 
+    @TableField("is_top")
+    private Byte isTop;
+
     @TableField("last_message_time")
     private LocalDateTime lastMessageTime;
 

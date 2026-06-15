@@ -3,6 +3,10 @@ package com.example.edubackend.mapper;
 import com.example.edubackend.entity.QuestionBank;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.Collection;
+import java.util.List;
 
 /**
  * <p>
@@ -15,4 +19,7 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface QuestionBankMapper extends BaseMapper<QuestionBank> {
 
+    QuestionBank selectByIdIncludingDeleted(@Param("id") Long id);
+
+    List<QuestionBank> selectBatchIdsIncludingDeleted(@Param("ids") Collection<Long> ids);
 }

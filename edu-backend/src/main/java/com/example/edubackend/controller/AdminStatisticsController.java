@@ -64,7 +64,9 @@ public class AdminStatisticsController {
     @RequireRole("ADMIN")
     public Result<AdminClassStatisticsVO> getClassStatistics() {
         List<SysClass> classes = sysClassMapper.selectList(
-                new LambdaQueryWrapper<SysClass>().orderByDesc(SysClass::getCreateTime)
+                new LambdaQueryWrapper<SysClass>()
+                        .eq(SysClass::getIsDeleted, (byte) 0)
+                        .orderByDesc(SysClass::getCreateTime)
         );
         List<Long> classIds = classes.stream().map(SysClass::getId).toList();
 
@@ -72,10 +74,14 @@ public class AdminStatisticsController {
         Map<Long, List<SysUser>> teachersByClass = loadAssignedUsersByClass(classIds, "TEACHER");
         Map<Long, List<SysUser>> assistantsByClass = loadAssignedUsersByClass(classIds, "ASSISTANT");
         List<AssessmentTask> tasks = assessmentTaskMapper.selectList(
-                new LambdaQueryWrapper<AssessmentTask>().orderByDesc(AssessmentTask::getCreateTime)
+                new LambdaQueryWrapper<AssessmentTask>()
+                        .eq(AssessmentTask::getIsDeleted, (byte) 0)
+                        .orderByDesc(AssessmentTask::getCreateTime)
         );
         List<SurveyTask> surveys = surveyTaskMapper.selectList(
-                new LambdaQueryWrapper<SurveyTask>().orderByDesc(SurveyTask::getCreateTime)
+                new LambdaQueryWrapper<SurveyTask>()
+                        .eq(SurveyTask::getIsDeleted, (byte) 0)
+                        .orderByDesc(SurveyTask::getCreateTime)
         );
         Map<Long, SysUser> userMap = loadUserMap();
         Map<Long, List<StudentSubmission>> submissionsByTask = loadSubmissionsByTask(tasks);
@@ -384,9 +390,9 @@ public class AdminStatisticsController {
         overview.setActiveClassCount((int) classes.stream().filter(c -> c.getStatus() != null && c.getStatus() == 1).count());
         overview.setFinishedClassCount(Math.max(classes.size() - overview.getActiveClassCount(), 0));
         overview.setStudentCount(classes.stream().mapToInt(AdminClassStatisticsVO.ClassModule::getStudentCount).sum());
-        overview.setHomeworkCount(classes.stream().mapToInt(c -> c.getHomeworkSummary().getTaskCount()).sum());
-        overview.setExamCount(classes.stream().mapToInt(c -> c.getExamSummary().getTaskCount()).sum());
-        overview.setSurveyCount(classes.stream().mapToInt(c -> c.getSurveySummary().getSurveyCount()).sum());
+        overview.setHomeworkCount(distinctWorkCount(classes, AdminClassStatisticsVO.ClassModule::getHomeworks));
+        overview.setExamCount(distinctWorkCount(classes, AdminClassStatisticsVO.ClassModule::getExams));
+        overview.setSurveyCount(distinctSurveyCount(classes));
         overview.setHomeworkAverageScore(weightedAverageSummaryScore(classes.stream().map(c -> c.getHomeworkSummary()).toList()));
         overview.setExamAverageScore(weightedAverageSummaryScore(classes.stream().map(c -> c.getExamSummary()).toList()));
         overview.setSurveyAverageScore(weightedAverageSurveySummaryScore(classes.stream().map(c -> c.getSurveySummary()).toList()));
@@ -394,6 +400,26 @@ public class AdminStatisticsController {
         overview.setExamScoreSampleCount(classes.stream().mapToInt(c -> c.getExamSummary().getScoreSampleCount()).sum());
         overview.setSurveyScoreSampleCount(classes.stream().mapToInt(c -> c.getSurveySummary().getScoreSampleCount()).sum());
         return overview;
+    }
+
+    private int distinctWorkCount(
+            List<AdminClassStatisticsVO.ClassModule> classes,
+            Function<AdminClassStatisticsVO.ClassModule, List<AdminClassStatisticsVO.WorkItem>> itemsProvider) {
+        return (int) classes.stream()
+                .flatMap(clazz -> itemsProvider.apply(clazz).stream())
+                .map(AdminClassStatisticsVO.WorkItem::getTaskId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+    }
+
+    private int distinctSurveyCount(List<AdminClassStatisticsVO.ClassModule> classes) {
+        return (int) classes.stream()
+                .flatMap(clazz -> clazz.getSurveys().stream())
+                .map(AdminClassStatisticsVO.SurveyItem::getSurveyId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
     }
 
     private boolean appliesToClass(String targetClassIdsJson, Long classId) {

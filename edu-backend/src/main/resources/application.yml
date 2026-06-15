@@ -1,5 +1,6 @@
 server:
   port: ${SERVER_PORT:8080}
+  address: ${SERVER_ADDRESS:0.0.0.0}
 
 spring:
   application:
@@ -73,4 +74,4 @@ file:
 
 app:
   cors:
-    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3001,http://127.0.0.1:3001,http://192.168.50.149:3001}
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3001,http://127.0.0.1:3001,http://192.168.50.149:3001,http://172.16.45.208:3001}

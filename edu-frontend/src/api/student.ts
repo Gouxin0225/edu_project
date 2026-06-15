@@ -5,13 +5,15 @@ export interface TaskVO {
   taskType: 'EXAM' | 'HOMEWORK'
   title: string
   deadline: string
-  status: 'UPCOMING' | 'PENDING' | 'SUBMITTED' | 'COMPLETED'
+  status: 'UPCOMING' | 'PENDING' | 'RETURNED' | 'SUBMITTED' | 'COMPLETED'
   scoreGained: number | null
 }
 
 export interface DashboardVO {
   upcomingTasks: TaskVO[]
+  todoTasks?: TaskVO[]
   pendingTasks: TaskVO[]
+  submittedTasks?: TaskVO[]
   completedTasks: TaskVO[]
 }
 

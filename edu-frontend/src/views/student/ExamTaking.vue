@@ -30,9 +30,9 @@
         <div class="question-grid">
           <div
             v-for="(q, idx) in questions"
-            :key="q.questionId"
+            :key="getQuestionRenderKey(q, idx)"
             class="question-dot"
-            :class="getDotClass(q.questionId)"
+            :class="[getDotClass(q.questionId), { active: idx === currentQuestionIndex }]"
             @click="goToQuestion(idx)"
           >
             {{ idx + 1 }}
@@ -41,35 +41,37 @@
       </div>
     </div>
 
-    <div class="answer-area" ref="answerAreaRef">
+    <div class="answer-area">
       <div
-        v-for="(question, idx) in questions"
-        :key="question.questionId"
-        :id="'question-' + idx"
+        v-if="currentQuestion"
+        ref="questionCardRef"
+        :key="currentQuestionRenderKey"
+        :id="'question-' + currentQuestionIndex"
         class="question-card"
       >
         <div class="question-header">
-          <span class="question-index">第 {{ idx + 1 }} 题</span>
-          <el-tag size="small" :type="getTypeTagType(question.type)">
-            {{ getTypeLabel(question.type) }}
+          <span class="question-index">第 {{ currentQuestionIndex + 1 }} 题</span>
+          <el-tag size="small" :type="getTypeTagType(currentQuestion.type)">
+            {{ getTypeLabel(currentQuestion.type) }}
           </el-tag>
           <el-button
             size="small"
-            :type="markedQuestions.has(question.questionId) ? 'warning' : 'info'"
-            @click="toggleMark(question.questionId)"
+            :type="currentQuestionMarked ? 'warning' : 'info'"
+            :disabled="currentQuestionId === null"
+            @click="toggleMark(currentQuestionId)"
           >
-            {{ markedQuestions.has(question.questionId) ? '取消标记' : '标记本题' }}
+            {{ currentQuestionMarked ? '取消标记' : '标记本题' }}
           </el-button>
         </div>
-        <div class="question-content">{{ question.content }}</div>
+        <div class="question-content">{{ currentQuestion.content }}</div>
         <div class="question-options">
           <el-radio-group
-            v-if="question.type === 'SINGLE'"
-            v-model="answers[question.questionId]"
-            @change="handleSingleChange(question.questionId, $event)"
+            v-if="currentQuestion.type === 'SINGLE'"
+            v-model="currentAnswer"
+            @change="handleSingleChange(currentQuestionId, $event)"
           >
             <el-radio
-              v-for="(opt, optIdx) in parseOptions(question.optionsJson)"
+              v-for="(opt, optIdx) in parseOptions(currentQuestion.optionsJson)"
               :key="optIdx"
               :value="String.fromCharCode(65 + optIdx)"
               class="cyberpunk-radio"
@@ -79,12 +81,12 @@
           </el-radio-group>
 
           <el-checkbox-group
-            v-else-if="question.type === 'MULTIPLE'"
-            v-model="multipleAnswers[question.questionId]"
-            @change="handleMultipleChange(question.questionId)"
+            v-else-if="currentQuestion.type === 'MULTIPLE'"
+            v-model="currentMultipleAnswer"
+            @change="handleMultipleChange(currentQuestionId)"
           >
             <el-checkbox
-              v-for="(opt, optIdx) in parseOptions(question.optionsJson)"
+              v-for="(opt, optIdx) in parseOptions(currentQuestion.optionsJson)"
               :key="optIdx"
               :value="String.fromCharCode(65 + optIdx)"
               class="cyberpunk-checkbox"
@@ -94,32 +96,32 @@
           </el-checkbox-group>
 
           <el-radio-group
-            v-else-if="question.type === 'JUDGE'"
-            v-model="answers[question.questionId]"
-            @change="handleSingleChange(question.questionId, $event)"
+            v-else-if="currentQuestion.type === 'JUDGE'"
+            v-model="currentAnswer"
+            @change="handleSingleChange(currentQuestionId, $event)"
           >
             <el-radio value="T" class="cyberpunk-radio">正确</el-radio>
             <el-radio value="F" class="cyberpunk-radio">错误</el-radio>
           </el-radio-group>
 
           <el-input
-            v-else-if="question.type === 'SHORT'"
+            v-else-if="currentQuestion.type === 'SHORT'"
             type="textarea"
             :rows="6"
-            v-model="answers[question.questionId]"
+            v-model="currentAnswer"
             placeholder="请输入答案..."
-            @blur="handleAnswerChange(question.questionId)"
+            @blur="handleAnswerChange(currentQuestionId)"
             class="cyberpunk-textarea"
           />
 
-          <el-input
-            v-else-if="question.type === 'CODE'"
-            type="textarea"
-            :rows="10"
-            v-model="answers[question.questionId]"
-            placeholder="请输入代码..."
-            class="code-input cyberpunk-textarea"
-            @blur="handleAnswerChange(question.questionId)"
+          <CodeEditor
+            v-else-if="currentQuestion.type === 'CODE'"
+            v-model="currentAnswer"
+            language="python"
+            :height="420"
+            :font-size="16"
+            class="code-input"
+            @blur="handleAnswerChange(currentQuestionId)"
           />
         </div>
       </div>
@@ -132,19 +134,91 @@
       <el-button @click="nextQuestion" :disabled="currentQuestionIndex === questions.length - 1" class="cyberpunk-btn">
         下一题
       </el-button>
-      <el-button type="danger" @click="handleSubmit" class="cyberpunk-btn submit-btn">
+      <el-button type="danger" :loading="submittingExam" @click="handleSubmit" class="cyberpunk-btn submit-btn">
         提交试卷
       </el-button>
     </div>
+
+    <el-dialog
+      v-model="showRequiredSurveyDialog"
+      :title="requiredSurveyRequirement?.surveyTitle || '提交前问卷'"
+      width="760px"
+      top="5vh"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+      class="required-survey-dialog"
+    >
+      <div v-loading="requiredSurveyLoading" class="required-survey-body">
+        <div class="required-survey-alert">
+          提交试卷前必须完成该调查问卷，问卷提交成功后系统会自动交卷。
+        </div>
+
+        <div v-for="(question, index) in requiredSurveyDetail?.questions" :key="question.questionId" class="survey-question-block">
+          <div class="survey-question-title">
+            <span v-if="question.isRequired === 1" class="required-mark">*</span>
+            <span>{{ index + 1 }}. {{ question.title }}</span>
+          </div>
+
+          <el-rate
+            v-if="question.type === 'STAR'"
+            v-model="requiredSurveyAnswers[question.questionId]"
+            :max="5"
+            show-text
+            :texts="['非常不满意', '不满意', '一般', '满意', '非常满意']"
+          />
+
+          <div v-else-if="question.type === 'NPS'" class="survey-nps-grid">
+            <el-button
+              v-for="score in 11"
+              :key="score - 1"
+              :type="requiredSurveyAnswers[question.questionId] === score - 1 ? 'primary' : 'default'"
+              @click="requiredSurveyAnswers[question.questionId] = score - 1"
+            >
+              {{ score - 1 }}
+            </el-button>
+          </div>
+
+          <el-slider
+            v-else-if="question.type === 'SCALE'"
+            v-model="requiredSurveyAnswers[question.questionId]"
+            :min="1"
+            :max="5"
+            :step="1"
+            :marks="getScaleMarks(question.optionsJson)"
+          />
+
+          <el-input
+            v-else-if="question.type === 'TEXT'"
+            v-model="requiredSurveyAnswers[question.questionId]"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入您的回答"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button type="primary" :loading="requiredSurveySubmitting" @click="handleRequiredSurveySubmit">
+          提交问卷并交卷
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { startExam, resumeExam, saveExamAnswers, submitExam, reportScreenSwitch } from '@/api/exam'
+import {
+  startExam, resumeExam, saveExamAnswers, submitExam, reportScreenSwitch as reportScreenSwitchApi,
+  getExamSubmitRequirement, type ExamSubmitRequirement
+} from '@/api/exam'
+import { getSurveyDetail, submitSurvey, type SurveyAnswer, type SurveyDetail } from '@/api/survey'
+import CodeEditor from '@/components/CodeEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -159,28 +233,78 @@ const multipleAnswers = reactive<Record<number, string[]>>({})
 const markedQuestions = ref(new Set<number>())
 
 const navCollapsed = ref(false)
-const currentQuestionIndex = ref(0)
+const submittingExam = ref(false)
+const showRequiredSurveyDialog = ref(false)
+const requiredSurveyLoading = ref(false)
+const requiredSurveySubmitting = ref(false)
+const requiredSurveyRequirement = ref<ExamSubmitRequirement | null>(null)
+const requiredSurveyDetail = ref<SurveyDetail | null>(null)
+const requiredSurveyAnswers = reactive<Record<number, any>>({})
 
 let autoSaveTimer: number | null = null
 let countdownTimer: number | null = null
 let remainingSeconds = ref(0)
 let screenSwitchCount = 0
 let switchScreenLimit = ref(5)
+const currentQuestionIndex = ref(0)
+const questionCardRef = ref<HTMLElement | null>(null)
 
 const totalQuestions = computed(() => questions.value.length)
+const currentQuestion = computed(() => questions.value[currentQuestionIndex.value] || null)
+const currentQuestionId = computed(() => getQuestionId(currentQuestion.value))
+const currentQuestionRenderKey = computed(() => getQuestionRenderKey(currentQuestion.value, currentQuestionIndex.value))
+const currentQuestionMarked = computed(() => {
+  const qid = currentQuestionId.value
+  return qid !== null && markedQuestions.value.has(qid)
+})
+const currentAnswer = computed({
+  get: () => {
+    const qid = currentQuestionId.value
+    return qid === null ? '' : answers[qid] || ''
+  },
+  set: (value: string) => {
+    const qid = currentQuestionId.value
+    if (qid !== null) answers[qid] = value
+  }
+})
+const currentMultipleAnswer = computed({
+  get: () => {
+    const qid = currentQuestionId.value
+    return qid === null ? [] : multipleAnswers[qid] || []
+  },
+  set: (value: string[]) => {
+    const qid = currentQuestionId.value
+    if (qid !== null) multipleAnswers[qid] = value
+  }
+})
 
 const answeredCount = computed(() => {
   let count = 0
   for (const q of questions.value) {
-    const qid = q.questionId
+    const qid = getQuestionId(q)
+    if (qid === null) continue
     if (q.type === 'MULTIPLE') {
       if (multipleAnswers[qid]?.length > 0) count++
     } else {
-      if (answers[qid]?.trim()) count++
+      if (String(answers[qid] || '').trim()) count++
     }
   }
   return count
 })
+
+function normalizeQuestionId(value: any): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const id = Number(value)
+  return Number.isFinite(id) ? id : null
+}
+
+function getQuestionId(question: any): number | null {
+  return normalizeQuestionId(question?.questionId)
+}
+
+function getQuestionRenderKey(question: any, index: number): number | string {
+  return getQuestionId(question) ?? `index-${index}`
+}
 
 function parseOptions(optionsJson: string | null): string[] {
   if (!optionsJson) return []
@@ -198,14 +322,16 @@ function formatTime(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function getDotClass(questionId: number): string {
-  if (markedQuestions.value.has(questionId)) return 'orange'
-  const q = questions.value.find(q => q.questionId === questionId)
+function getDotClass(questionId: number | string | null | undefined): string {
+  const qid = normalizeQuestionId(questionId)
+  if (qid === null) return 'dark'
+  if (markedQuestions.value.has(qid)) return 'orange'
+  const q = questions.value.find(q => getQuestionId(q) === qid)
   if (!q) return 'dark'
   if (q.type === 'MULTIPLE') {
-    return multipleAnswers[questionId]?.length > 0 ? 'green' : 'dark'
+    return multipleAnswers[qid]?.length > 0 ? 'green' : 'dark'
   }
-  return answers[questionId]?.trim() ? 'green' : 'dark'
+  return String(answers[qid] || '').trim() ? 'green' : 'dark'
 }
 
 function getTypeTagType(type: string): string {
@@ -222,7 +348,23 @@ function getTypeLabel(type: string): string {
   return map[type] || type
 }
 
-function toggleMark(questionId: number) {
+function getScaleMarks(optionsJson: string): Record<number, string> {
+  try {
+    const labels = JSON.parse(optionsJson || '[]')
+    return {
+      1: labels[0] || '1',
+      2: labels[1] || '2',
+      3: labels[2] || '3',
+      4: labels[3] || '4',
+      5: labels[4] || '5'
+    }
+  } catch {
+    return { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5' }
+  }
+}
+
+function toggleMark(questionId: number | null) {
+  if (questionId === null) return
   if (markedQuestions.value.has(questionId)) {
     markedQuestions.value.delete(questionId)
   } else {
@@ -231,22 +373,35 @@ function toggleMark(questionId: number) {
   markedQuestions.value = new Set(markedQuestions.value)
 }
 
-function handleSingleChange(questionId: number, value: string) {
+function handleSingleChange(questionId: number | null, value: string) {
+  if (questionId === null) return
   answers[questionId] = value
 }
 
-function handleMultipleChange(questionId: number) {}
+function handleMultipleChange(questionId: number | null) {
+  if (questionId === null) return
+}
 
-function handleAnswerChange(questionId: number) {
+function handleAnswerChange(questionId: number | null) {
+  if (questionId === null) return
   void saveAnswers()
 }
 
 function goToQuestion(index: number) {
+  if (index < 0 || index >= questions.value.length) return
   currentQuestionIndex.value = index
-  const element = document.getElementById('question-' + index)
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  scrollQuestionIntoView()
+}
+
+function scrollQuestionIntoView() {
+  nextTick(() => {
+    const scrollContainer = questionCardRef.value?.closest('.layout-main') as HTMLElement | null
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    questionCardRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
 }
 
 function prevQuestion() {
@@ -282,7 +437,8 @@ function parseMultipleAnswer(answerValue?: string | null): string[] {
 
 function restoreAnswersFromQuestions() {
   for (const q of questions.value) {
-    const qid = q.questionId
+    const qid = getQuestionId(q)
+    if (qid === null) continue
     if (q.type === 'MULTIPLE') {
       multipleAnswers[qid] = parseMultipleAnswer(q.studentAnswer)
     } else {
@@ -327,7 +483,8 @@ async function saveAnswers() {
   const answersList: { questionId: number; answerValue: string }[] = []
 
   for (const q of questions.value) {
-    const qid = q.questionId
+    const qid = getQuestionId(q)
+    if (qid === null) continue
     let val = ''
     if (q.type === 'MULTIPLE') {
       const arr = multipleAnswers[qid]
@@ -335,7 +492,7 @@ async function saveAnswers() {
     } else {
       val = answers[qid] || ''
     }
-    if (val.trim()) {
+    if (String(val || '').trim()) {
       answersList.push({ questionId: qid, answerValue: val })
     }
   }
@@ -347,6 +504,54 @@ async function saveAnswers() {
   } catch (error) {
     console.error('自动保存失败', error)
   }
+}
+
+function resetRequiredSurveyAnswers() {
+  Object.keys(requiredSurveyAnswers).forEach(key => {
+    delete requiredSurveyAnswers[Number(key)]
+  })
+}
+
+async function loadRequiredSurvey(requirement: ExamSubmitRequirement) {
+  if (!requirement.surveyId) {
+    throw new Error('考试未配置必填问卷')
+  }
+  requiredSurveyRequirement.value = requirement
+  requiredSurveyLoading.value = true
+  showRequiredSurveyDialog.value = true
+  try {
+    const res = await getSurveyDetail(requirement.surveyId)
+    requiredSurveyDetail.value = res.data
+    resetRequiredSurveyAnswers()
+    requiredSurveyDetail.value?.questions?.forEach(question => {
+      if (question.type === 'STAR') requiredSurveyAnswers[question.questionId] = 0
+      else if (question.type === 'NPS') requiredSurveyAnswers[question.questionId] = undefined
+      else if (question.type === 'SCALE') requiredSurveyAnswers[question.questionId] = 3
+      else requiredSurveyAnswers[question.questionId] = ''
+    })
+  } finally {
+    requiredSurveyLoading.value = false
+  }
+}
+
+function validateRequiredSurveyAnswers() {
+  if (!requiredSurveyDetail.value?.questions) return false
+  for (const question of requiredSurveyDetail.value.questions) {
+    if (question.isRequired !== 1) continue
+    const answer = requiredSurveyAnswers[question.questionId]
+    if (answer === undefined || answer === null || answer === '' || answer === 0) {
+      const index = requiredSurveyDetail.value.questions.indexOf(question) + 1
+      ElMessage.warning(`请回答问卷第${index}题`)
+      return false
+    }
+  }
+  return true
+}
+
+async function finishExamSubmit() {
+  await submitExam(examId.value)
+  ElMessage.success('交卷成功')
+  router.push('/student/exams')
 }
 
 function startCountdown() {
@@ -370,14 +575,14 @@ function startAutoSave() {
 
 function handleVisibilityChange() {
   if (document.hidden) {
-    reportScreenSwitch()
+    handleScreenSwitchReport()
   }
 }
 
-async function reportScreenSwitch() {
+async function handleScreenSwitchReport() {
   if (!submissionId.value) return
   try {
-    const res = await reportScreenSwitch(examId.value)
+    const res = await reportScreenSwitchApi(examId.value)
     screenSwitchCount = res.data || 0
     if (screenSwitchCount >= switchScreenLimit.value) {
       ElMessage.error('切屏次数过多，已自动交卷')
@@ -389,20 +594,67 @@ async function reportScreenSwitch() {
 }
 
 async function doSubmit() {
+  if (submittingExam.value) return
+  submittingExam.value = true
   clearInterval(autoSaveTimer!)
   clearInterval(countdownTimer!)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 
   try {
     await saveAnswers()
-    await submitExam(examId.value)
-    ElMessage.success('交卷成功')
-    router.push('/student/exams')
+    const requirementRes = await getExamSubmitRequirement(examId.value)
+    const requirement = requirementRes.data
+    if (requirement.requireSurvey && !requirement.surveySubmitted) {
+      if (requirement.surveyExpired) {
+        throw new Error(requirement.message || '绑定的调查问卷已截止且未填写，无法提交试卷')
+      }
+      await loadRequiredSurvey(requirement)
+      return
+    }
+    if (!requirement.requireSurvey && requirement.message) {
+      ElMessage.warning(requirement.message)
+    }
+    await finishExamSubmit()
   } catch (error: any) {
     ElMessage.error(error.message || '交卷失败')
     startCountdown()
     startAutoSave()
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    submittingExam.value = false
+  }
+}
+
+async function handleRequiredSurveySubmit() {
+  if (!requiredSurveyRequirement.value?.surveyId || !validateRequiredSurveyAnswers()) return
+
+  requiredSurveySubmitting.value = true
+  try {
+    const answerList: SurveyAnswer[] = []
+    requiredSurveyDetail.value?.questions?.forEach(question => {
+      answerList.push({
+        questionId: question.questionId,
+        answerValue: String(requiredSurveyAnswers[question.questionId] ?? '')
+      })
+    })
+    await submitSurvey(requiredSurveyRequirement.value.surveyId, {
+      surveyId: requiredSurveyRequirement.value.surveyId,
+      answers: answerList
+    })
+    showRequiredSurveyDialog.value = false
+    ElMessage.success('问卷提交成功，正在交卷')
+    await finishExamSubmit()
+  } catch (error: any) {
+    ElMessage.error(error.message || '问卷提交失败')
+    if (!showRequiredSurveyDialog.value) {
+      startCountdown()
+      startAutoSave()
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
+  } finally {
+    requiredSurveySubmitting.value = false
+    if (!showRequiredSurveyDialog.value) {
+      submittingExam.value = false
+    }
   }
 }
 
@@ -432,7 +684,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .exam-taking-container {
   min-height: 100vh;
-  background: var(--bg-base, #030303);
+  background: var(--bg-base);
   padding-top: 60px;
   padding-bottom: 70px;
 }
@@ -443,8 +695,8 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   height: 60px;
-  background: #0a0a0a;
-  border-bottom: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -476,7 +728,7 @@ onBeforeUnmount(() => {
 .exam-title {
   font-size: 18px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
 }
@@ -502,7 +754,7 @@ onBeforeUnmount(() => {
 
 .progress {
   font-size: 16px;
-  color: #909090;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -511,8 +763,8 @@ onBeforeUnmount(() => {
   top: 70px;
   left: 0;
   width: 200px;
-  background: #0a0a0a;
-  border-right: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
   box-shadow: 2px 0 20px rgba(0, 255, 255, 0.1);
   z-index: 999;
   transition: width 0.3s;
@@ -529,7 +781,7 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
   width: 32px;
   height: 32px;
-  background: #0a0a0a;
+  background: var(--bg-surface);
   border: 1px solid #00ffff;
   display: flex;
   align-items: center;
@@ -555,7 +807,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-bottom: 16px;
   font-size: 12px;
-  color: #909090;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -576,8 +828,8 @@ onBeforeUnmount(() => {
 }
 
 .dot.dark {
-  background: #1a1a2e;
-  border: 1px solid #333;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
 }
 
 .dot.orange {
@@ -601,9 +853,9 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: all 0.2s;
   font-family: 'JetBrains Mono', monospace;
-  border: 1px solid #333;
-  color: #909090;
-  background: #0a0a0a;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
 }
 
 .question-dot.green {
@@ -614,9 +866,9 @@ onBeforeUnmount(() => {
 }
 
 .question-dot.dark {
-  background: #1a1a2e;
-  color: #909090;
-  border-color: #333;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 .question-dot.orange {
@@ -624,6 +876,13 @@ onBeforeUnmount(() => {
   color: #000;
   border-color: #ff9800;
   box-shadow: 0 0 8px rgba(255, 152, 0, 0.5);
+}
+
+.question-dot.active {
+  border-color: #ff10f0;
+  color: #000;
+  box-shadow: 0 0 14px rgba(255, 16, 240, 0.7);
+  transform: scale(1.08);
 }
 
 .question-dot:hover {
@@ -639,8 +898,8 @@ onBeforeUnmount(() => {
 }
 
 .question-card {
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   padding: 24px;
   margin-bottom: 20px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(0, 255, 255, 0.02);
@@ -665,7 +924,7 @@ onBeforeUnmount(() => {
 .question-content {
   font-size: 16px;
   line-height: 1.8;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin-bottom: 20px;
   font-family: 'JetBrains Mono', monospace;
   text-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
@@ -689,12 +948,12 @@ onBeforeUnmount(() => {
 .question-options :deep(.el-checkbox__label) {
   word-break: break-all;
   line-height: 1.6;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 :deep(.cyberpunk-radio .el-radio__input .el-radio__inner),
 :deep(.cyberpunk-checkbox .el-checkbox__input .el-checkbox__inner) {
-  background-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
   border-color: #00ffff !important;
   box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
 }
@@ -714,7 +973,7 @@ onBeforeUnmount(() => {
 
 :deep(.cyberpunk-radio .el-radio__input.is-checked .el-radio__inner::after),
 :deep(.cyberpunk-checkbox .el-checkbox__input.is-checked .el-checkbox__inner::after) {
-  background-color: #000;
+  background-color: var(--bg-base);
 }
 
 :deep(.cyberpunk-radio:hover .el-radio__label),
@@ -731,7 +990,7 @@ onBeforeUnmount(() => {
 
 :deep(.el-radio__inner),
 :deep(.el-checkbox__inner) {
-  background-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
   border-color: #00ffff !important;
 }
 
@@ -743,7 +1002,7 @@ onBeforeUnmount(() => {
 
 :deep(.el-radio__label),
 :deep(.el-checkbox__label) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-radio__input.is-checked + .el-radio__label),
@@ -752,9 +1011,9 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-textarea__inner) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -773,8 +1032,8 @@ onBeforeUnmount(() => {
   left: 220px;
   right: 0;
   padding: 12px 24px;
-  background: #0a0a0a;
-  border-top: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: center;
   gap: 16px;
@@ -784,7 +1043,7 @@ onBeforeUnmount(() => {
 
 .cyberpunk-btn {
   min-width: 100px;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   border: 1px solid #00ffff !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace;
@@ -801,8 +1060,8 @@ onBeforeUnmount(() => {
 
 .cyberpunk-btn:disabled {
   opacity: 0.4;
-  border-color: #333 !important;
-  color: #666 !important;
+  border-color: var(--border) !important;
+  color: var(--text-secondary) !important;
   box-shadow: none;
 }
 
@@ -818,6 +1077,59 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 25px rgba(255, 16, 240, 0.6);
 }
 
+.required-survey-dialog :deep(.el-dialog) {
+  background: var(--bg-surface) !important;
+  border: 1px solid #00ffff !important;
+}
+
+.required-survey-dialog :deep(.el-dialog__header),
+.required-survey-dialog :deep(.el-dialog__footer) {
+  border-color: var(--border-subtle) !important;
+}
+
+.required-survey-dialog :deep(.el-dialog__title) {
+  color: #00ffff !important;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.required-survey-body {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.required-survey-alert {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 152, 0, 0.35);
+  background: rgba(255, 152, 0, 0.08);
+  color: #ff9800;
+  font-size: 14px;
+}
+
+.survey-question-block {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.survey-question-title {
+  margin-bottom: 12px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.required-mark {
+  color: #ff10f0;
+  margin-right: 4px;
+}
+
+.survey-nps-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 :deep(.el-button--warning) {
   background: #ff9800 !important;
   border-color: #ff9800 !important;
@@ -825,7 +1137,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-button--info) {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
   border-color: #00ffff !important;
   color: #00ffff !important;
 }

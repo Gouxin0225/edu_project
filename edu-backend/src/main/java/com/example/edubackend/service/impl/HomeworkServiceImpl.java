@@ -35,6 +35,7 @@ public class HomeworkServiceImpl implements IHomeworkService {
     private final SysUserMapper sysUserMapper;
     private final ClassStudentRelMapper classStudentRelMapper;
     private final ObjectMapper objectMapper;
+    private final OperationAuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -80,6 +81,8 @@ public class HomeworkServiceImpl implements IHomeworkService {
 
         List<Long> homeworkIds = homeworks.stream().map(AssessmentTask::getId).toList();
         Map<Long, List<StudentSubmission>> latestSubmissionsByTask = getLatestSubmissionsByTaskIds(homeworkIds, null);
+        List<Long> teacherClassIds = getTeacherClassIds(UserContext.getUserId());
+        boolean admin = "ADMIN".equals(UserContext.getUser().getRole());
 
         List<HomeworkListVO> result = new ArrayList<>();
         for (AssessmentTask hw : homeworks) {
@@ -88,6 +91,7 @@ public class HomeworkServiceImpl implements IHomeworkService {
             vo.setTitle(hw.getTitle());
             vo.setDeadline(hw.getEndTime());
             vo.setContent(readHomeworkContent(hw));
+            vo.setTargetStudentCount(getTargetStudentCount(hw, teacherClassIds, admin));
 
             List<StudentSubmission> submissions = latestSubmissionsByTask.getOrDefault(hw.getId(), List.of());
 
@@ -140,6 +144,7 @@ public class HomeworkServiceImpl implements IHomeworkService {
             vo.setDeadline(homework.getEndTime());
             vo.setContent(readHomeworkContent(homework));
             vo.setTotalSubmissions(submissions.size());
+            vo.setTargetStudentCount(students.size());
             vo.setGradedSubmissions((int) submissions.stream().filter(s -> "GRADED".equals(s.getStatus())).count());
             vo.setPendingSubmissions((int) submissions.stream()
                     .filter(s -> "SUBMITTED".equals(s.getStatus()) || "RETURNED".equals(s.getStatus()))
@@ -457,6 +462,12 @@ public class HomeworkServiceImpl implements IHomeworkService {
 
         if (!unsubmitted.isEmpty()) {
             log.info("班主任 {} 催交了作业 {} 的学生: {}", assistantId, homeworkId, unsubmitted);
+            auditLogService.record(
+                    "HOMEWORK_REMIND",
+                    "HOMEWORK",
+                    homeworkId,
+                    "提醒未交作业学生，studentIds=" + unsubmitted + "，提醒人数=" + unsubmitted.size()
+            );
         }
     }
 
@@ -608,6 +619,26 @@ public class HomeworkServiceImpl implements IHomeworkService {
         return rels.stream()
                 .map(TeacherClassRel::getClassId)
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    private List<Long> getTeacherClassIds(Long teacherId) {
+        return getAssistantClassIds(teacherId);
+    }
+
+    private int getTargetStudentCount(AssessmentTask task, List<Long> scopeClassIds, boolean admin) {
+        List<Long> targetClassIds = parseTargetClassIds(task.getTargetClassIds());
+        if (targetClassIds.isEmpty()) {
+            if (admin) {
+                return sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getRole, "STUDENT")
+                        .eq(SysUser::getIsDeleted, 0)).size();
+            }
+            return getStudentsInClasses(scopeClassIds).size();
+        }
+        List<Long> classIds = admin
+                ? targetClassIds
+                : targetClassIds.stream().filter(scopeClassIds::contains).toList();
+        return getStudentsInClasses(classIds).size();
     }
 
     private AssessmentTask assertAssistantCanAccessHomework(Long homeworkId, Long assistantId) {

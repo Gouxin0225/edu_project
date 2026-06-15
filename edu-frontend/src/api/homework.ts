@@ -14,6 +14,7 @@ export interface HomeworkListItem {
   content: string
   deadline: string
   totalSubmissions: number
+  targetStudentCount: number
   gradedSubmissions: number
   pendingSubmissions: number
 }

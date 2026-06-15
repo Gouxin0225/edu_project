@@ -7,6 +7,7 @@ import com.example.edubackend.dto.AiChatMessageDTO;
 import com.example.edubackend.dto.AiChatMessageVO;
 import com.example.edubackend.dto.AiChatSessionVO;
 import com.example.edubackend.dto.CreateAiChatSessionDTO;
+import com.example.edubackend.dto.UpdateAiChatSessionDTO;
 import com.example.edubackend.entity.AiChatMessage;
 import com.example.edubackend.entity.AiChatSession;
 import com.example.edubackend.entity.SysUser;
@@ -46,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -143,10 +145,11 @@ public class AiChatServiceImpl implements IAiChatService {
                 new LambdaQueryWrapper<AiChatSession>()
                         .eq(AiChatSession::getUserId, user.getId())
                         .eq(AiChatSession::getUserRole, user.getRole())
+                        .orderByDesc(AiChatSession::getIsTop)
                         .orderByDesc(AiChatSession::getLastMessageTime)
                         .orderByDesc(AiChatSession::getCreateTime)
         );
-        return sessions.stream().map(this::toSessionVO).toList();
+        return sessions.stream().map(this::toSessionVO).collect(Collectors.toList());
     }
 
     @Override
@@ -308,6 +311,20 @@ public class AiChatServiceImpl implements IAiChatService {
         if (generation != null) {
             generation.cancelled().set(true);
         }
+    }
+
+    @Override
+    @Transactional
+    public AiChatSessionVO updateSession(Long sessionId, UpdateAiChatSessionDTO dto, SysUser user) {
+        AiChatSession session = assertSessionOwner(sessionId, user);
+        if (dto.getTitle() != null) {
+            session.setTitle(dto.getTitle());
+        }
+        if (dto.getIsTop() != null) {
+            session.setIsTop((byte) (dto.getIsTop() ? 1 : 0));
+        }
+        sessionMapper.updateById(session);
+        return toSessionVO(session);
     }
 
     @Override
@@ -700,7 +717,7 @@ public class AiChatServiceImpl implements IAiChatService {
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
         body.put("temperature", 0.5);
-        body.put("max_tokens", 2048);
+        body.put("max_tokens", 8192);
         body.put("stream", true);
         body.put("messages", messages);
 
@@ -777,7 +794,7 @@ public class AiChatServiceImpl implements IAiChatService {
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
         body.put("temperature", 0.5);
-        body.put("max_tokens", 2048);
+        body.put("max_tokens", 8192);
         body.put("messages", messages);
 
         try {
@@ -904,6 +921,7 @@ public class AiChatServiceImpl implements IAiChatService {
         vo.setCourseCategory(session.getCourseCategory());
         vo.setKnowledgePoint(session.getKnowledgePoint());
         vo.setUserRole(session.getUserRole());
+        vo.setIsTop(session.getIsTop() != null && session.getIsTop() == 1);
         vo.setLastMessageTime(session.getLastMessageTime());
         vo.setCreateTime(session.getCreateTime());
         vo.setUpdateTime(session.getUpdateTime());

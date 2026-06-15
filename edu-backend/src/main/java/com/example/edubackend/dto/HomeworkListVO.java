@@ -12,6 +12,7 @@ public class HomeworkListVO {
     private String content;
     private LocalDateTime deadline;
     private Integer totalSubmissions;
+    private Integer targetStudentCount;
     private Integer gradedSubmissions;
     private Integer pendingSubmissions;
 }

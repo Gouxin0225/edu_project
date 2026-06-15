@@ -5,6 +5,7 @@ import com.example.edubackend.dto.AiChatMessageVO;
 import com.example.edubackend.dto.AiChatHistoryMessageVO;
 import com.example.edubackend.dto.AiChatSessionVO;
 import com.example.edubackend.dto.CreateAiChatSessionDTO;
+import com.example.edubackend.dto.UpdateAiChatSessionDTO;
 import com.example.edubackend.entity.SysUser;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -26,6 +27,8 @@ public interface IAiChatService {
     SseEmitter regenerateLastAnswer(Long sessionId, SysUser user);
 
     void cancelStreamMessage(Long sessionId, SysUser user);
+
+    AiChatSessionVO updateSession(Long sessionId, UpdateAiChatSessionDTO dto, SysUser user);
 
     void deleteSession(Long sessionId, SysUser user);
 }

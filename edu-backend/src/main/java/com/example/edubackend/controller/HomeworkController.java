@@ -10,6 +10,7 @@ import com.example.edubackend.mapper.AssessmentTaskMapper;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.IHomeworkService;
 import com.example.edubackend.service.IStudentSubmissionService;
+import com.example.edubackend.service.OperationAuditLogService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ public class HomeworkController {
     private final IHomeworkService homeworkService;
     private final IStudentSubmissionService submissionService;
     private final AssessmentTaskMapper assessmentTaskMapper;
+    private final OperationAuditLogService auditLogService;
 
     @PostMapping("/homework")
     @RequireRole({"ADMIN", "TEACHER"})
@@ -124,7 +126,10 @@ public class HomeworkController {
     @RequireRole({"ADMIN", "TEACHER"})
     public Result<Void> deleteHomework(@PathVariable Long id) {
         assertCanManageHomework(id);
+        AssessmentTask homework = assessmentTaskMapper.selectById(id);
         assessmentTaskMapper.deleteById(id);
+        auditLogService.record("HOMEWORK_DELETE", "HOMEWORK", id,
+                "删除作业 " + (homework == null ? id : homework.getTitle()));
         return Result.success("作业已删除");
     }
 

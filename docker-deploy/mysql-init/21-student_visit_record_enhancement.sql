@@ -1,0 +1,5 @@
+ALTER TABLE `student_visit_record`
+    ADD COLUMN IF NOT EXISTS `problem_category` VARCHAR(50) DEFAULT NULL COMMENT '问题分类',
+    ADD COLUMN IF NOT EXISTS `conclusion` VARCHAR(500) DEFAULT NULL COMMENT '沟通结论',
+    ADD COLUMN IF NOT EXISTS `attachment_url` VARCHAR(500) DEFAULT NULL COMMENT '附件或截图链接',
+    ADD COLUMN IF NOT EXISTS `is_resolved` TINYINT DEFAULT 0 COMMENT '是否解决: 1-已解决,0-未解决';

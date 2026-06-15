@@ -49,10 +49,15 @@
         class="mistake-card"
       >
         <div class="mistake-header" @click="toggleExpand(item.mistakeId)">
-          <div class="mistake-tags">
-            <el-tag size="small" class="cyberpunk-tag">{{ item.knowledgePoint }}</el-tag>
-            <el-tag size="small" :type="typeTagType(item.questionType)" class="cyberpunk-tag">{{ typeLabel(item.questionType) }}</el-tag>
-            <el-tag size="small" :type="diffTagType(item.difficulty)" class="cyberpunk-tag">{{ diffLabel(item.difficulty) }}</el-tag>
+          <div class="mistake-main">
+            <div class="mistake-tags">
+              <el-tag size="small" class="cyberpunk-tag">{{ item.knowledgePoint }}</el-tag>
+              <el-tag size="small" :type="typeTagType(item.questionType)" class="cyberpunk-tag">{{ typeLabel(item.questionType) }}</el-tag>
+              <el-tag size="small" :type="diffTagType(item.difficulty)" class="cyberpunk-tag">{{ diffLabel(item.difficulty) }}</el-tag>
+            </div>
+            <div class="mistake-question-preview">
+              {{ item.content || '暂无题目内容' }}
+            </div>
           </div>
           <div class="mistake-meta">
             <span class="wrong-count">
@@ -234,7 +239,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { Search, Trophy, Check, ArrowDown, WarningFilled, InfoFilled } from '@element-plus/icons-vue'
 import { getMistakeList, markMistakeMastered, startChallenge as apiStartChallenge } from '@/api/student'
 import type { MistakeVO, ChallengeVO, ChallengeQuestionVO } from '@/api/student'
@@ -444,14 +450,14 @@ onMounted(fetchMistakes)
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: var(--bg-base, #030303);
+  background: var(--bg-base);
   min-height: 100vh;
   padding: 0;
 }
 
 .toolbar-card :deep(.el-card__body) {
   padding: 12px 16px;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .toolbar {
@@ -475,25 +481,25 @@ onMounted(fetchMistakes)
 }
 
 .mistake-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
   clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
 }
 
 :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .mistake-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 14px 16px;
   cursor: pointer;
   transition: background 0.15s;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 14px;
 }
 
 .mistake-header:hover {
@@ -506,10 +512,27 @@ onMounted(fetchMistakes)
   flex-wrap: wrap;
 }
 
+.mistake-main {
+  flex: 1;
+  min-width: 280px;
+}
+
+.mistake-question-preview {
+  margin-top: 10px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .mistake-meta {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-top: 2px;
+  flex-shrink: 0;
 }
 
 .wrong-count {
@@ -525,7 +548,7 @@ onMounted(fetchMistakes)
 
 .last-time {
   font-size: 12px;
-  color: #909090;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -540,7 +563,7 @@ onMounted(fetchMistakes)
 
 .mistake-detail {
   padding: 0 16px 16px;
-  border-top: 1px solid #1a1a2e;
+  border-top: 1px solid var(--border);
 }
 
 .section-label {
@@ -556,7 +579,7 @@ onMounted(fetchMistakes)
 
 .content-text {
   font-size: 14px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   line-height: 1.7;
   white-space: pre-wrap;
   font-family: 'JetBrains Mono', monospace;
@@ -569,10 +592,10 @@ onMounted(fetchMistakes)
   padding: 6px 10px;
   font-size: 14px;
   margin-bottom: 4px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   font-family: 'JetBrains Mono', monospace;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .correct-option {
@@ -595,7 +618,7 @@ onMounted(fetchMistakes)
 
 .analysis-text {
   font-size: 14px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   line-height: 1.7;
   background: rgba(255, 152, 0, 0.05);
   border: 1px solid rgba(255, 152, 0, 0.2);
@@ -609,7 +632,7 @@ onMounted(fetchMistakes)
 }
 
 .challenge-tip {
-  color: #909090;
+  color: var(--text-secondary);
   font-size: 14px;
   margin-bottom: 16px;
   line-height: 1.6;
@@ -634,7 +657,7 @@ onMounted(fetchMistakes)
 }
 
 .cyberpunk-progress :deep(.el-progress-bar__outer) {
-  background-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
 }
 
 .cyberpunk-progress :deep(.el-progress-bar__inner) {
@@ -650,7 +673,7 @@ onMounted(fetchMistakes)
 
 .challenge-content {
   font-size: 15px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   line-height: 1.7;
   margin-bottom: 16px;
   white-space: pre-wrap;
@@ -669,13 +692,13 @@ onMounted(fetchMistakes)
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border: 1px solid #1a1a2e;
+  border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.15s;
   font-size: 14px;
-  background: #0a0a0a;
+  background: var(--bg-surface);
   font-family: 'JetBrains Mono', monospace;
-  color: #e0e0e0;
+  color: var(--text-primary);
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
 }
 
@@ -798,8 +821,8 @@ onMounted(fetchMistakes)
 
 .cancel-btn {
   background: transparent !important;
-  border: 1px solid #666 !important;
-  color: #909090 !important;
+  border: 1px solid var(--text-secondary) !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -816,18 +839,18 @@ onMounted(fetchMistakes)
 }
 
 .cyberpunk-input :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
   box-shadow: none !important;
 }
 
 .cyberpunk-input :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-input :deep(.el-input__inner::placeholder) {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
 }
 
 .cyberpunk-input :deep(.el-input__wrapper:focus) {
@@ -836,16 +859,16 @@ onMounted(fetchMistakes)
 }
 
 .cyberpunk-select :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
   box-shadow: none !important;
 }
 
 .cyberpunk-select :deep(.el-select__wrapper) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
   box-shadow: none !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -855,35 +878,35 @@ onMounted(fetchMistakes)
 }
 
 .cyberpunk-select :deep(.el-select-dropdown) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .cyberpunk-select :deep(.el-select-dropdown__item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-select :deep(.el-select-dropdown__item.hover),
 .cyberpunk-select :deep(.el-select-dropdown__item:hover) {
-  background-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
 }
 
 .cyberpunk-input-number :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
   box-shadow: none !important;
 }
 
 .cyberpunk-input-number :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-textarea :deep(.el-textarea__inner) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -893,30 +916,30 @@ onMounted(fetchMistakes)
 }
 
 .cyberpunk-form-item :deep(.el-form-item__label) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .max-hint {
   margin-left: 8px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 13px;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-dialog {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.1);
 }
 
 :deep(.el-dialog__header) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.el-dialog__title) {
@@ -926,17 +949,17 @@ onMounted(fetchMistakes)
 }
 
 :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-dialog__footer) {
-  border-top: 1px solid #1a1a2e !important;
+  border-top: 1px solid var(--border) !important;
 }
 
 :deep(.el-message-box) {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
 }
 
 :deep(.el-message-box__title) {
@@ -944,7 +967,7 @@ onMounted(fetchMistakes)
 }
 
 :deep(.el-message-box__message) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyberpunk-alert :deep(.el-alert__title) {
@@ -966,7 +989,7 @@ onMounted(fetchMistakes)
 }
 
 :deep(.el-empty__description) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
 }
 
 :deep(.el-empty__image svg) {

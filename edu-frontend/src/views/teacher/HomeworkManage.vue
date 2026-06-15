@@ -20,7 +20,7 @@
           <el-table-column label="提交进度" width="120" align="center">
             <template #default="{ row }">
               <span class="progress-text">
-                {{ row.totalSubmissions || 0 }} / {{ row.totalSubmissions || 0 }}
+                {{ row.totalSubmissions || 0 }} / {{ row.targetStudentCount || 0 }}
               </span>
             </template>
           </el-table-column>
@@ -34,9 +34,10 @@
               <el-tag type="warning" size="small">{{ row.pendingSubmissions || 0 }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button size="small" type="primary" text @click="enterGrading(row)">批改</el-button>
+              <el-button size="small" type="warning" text :icon="Download" @click="exportUnsubmitted(row)">导出未交</el-button>
               <el-button size="small" type="danger" text @click="handleDeleteHomework(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -246,8 +247,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { Plus, ArrowLeft, Download } from '@element-plus/icons-vue'
 import axios from 'axios'
 import {
   getTeacherHomeworkList,
@@ -258,11 +260,13 @@ import {
   gradeHomework,
   returnHomework,
   getSubmissionHistory,
+  getAssistantHomeworkProgress,
   type HomeworkListItem,
   type SubmissionHistoryItem,
   type HomeworkSubmissionDetail
 } from '@/api/homework'
 import { getMyClasses, type TeacherClass } from '@/api/teacher'
+import { exportRowsToXlsx } from '@/utils/exportRows'
 
 const loading = ref(false)
 const subLoading = ref(false)
@@ -413,6 +417,26 @@ async function handleDeleteHomework(homework: HomeworkListItem) {
   }
 }
 
+async function exportUnsubmitted(homework: HomeworkListItem) {
+  try {
+    const res = await getAssistantHomeworkProgress(homework.homeworkId)
+    const students = res.data?.unsubmittedStudents || []
+    await exportRowsToXlsx(
+      `${homework.title}-未交名单.xlsx`,
+      [
+        { label: '作业标题', prop: () => homework.title },
+        { label: '学生姓名', prop: 'studentName' },
+        { label: '账号', prop: 'username' },
+        { label: '状态', prop: () => '未提交' },
+        { label: '截止时间', prop: () => formatTime(homework.deadline) }
+      ],
+      students
+    )
+  } catch (error: any) {
+    ElMessage.error(error.message || '导出未交名单失败')
+  }
+}
+
 async function enterGrading(homework: HomeworkListItem) {
   currentHomework.value = homework
   isGrading.value = true
@@ -529,14 +553,14 @@ onMounted(() => {
 
 .page {
   padding: 0;
-  background: #030303;
+  background: var(--bg-surface);
   min-height: 100vh;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .page :deep(.el-card) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
 }
@@ -544,7 +568,7 @@ onMounted(() => {
 .page :deep(.el-card__header) {
   padding: 12px 20px;
   background: transparent !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace;
   font-weight: 600;
@@ -610,26 +634,26 @@ onMounted(() => {
 }
 
 .page :deep(.el-table) {
-  --el-table-bg-color: #0a0a0a !important;
-  --el-table-tr-bg-color: #0a0a0a !important;
+  --el-table-bg-color: var(--bg-surface) !important;
+  --el-table-tr-bg-color: var(--bg-surface) !important;
   --el-table-header-bg-color: rgba(26, 26, 46, 0.8) !important;
   --el-table-header-text-color: #00ffff !important;
-  --el-table-text-color: #e0e0e0 !important;
-  --el-table-border-color: #1a1a2e !important;
+  --el-table-text-color: var(--text-primary) !important;
+  --el-table-border-color: var(--border-subtle) !important;
   --el-table-row-hover-bg-color: rgba(0, 255, 255, 0.05) !important;
   font-family: 'JetBrains Mono', monospace;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
 }
 
 .page :deep(.el-table th.el-table__cell) {
   background: rgba(26, 26, 46, 0.8) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-weight: 600;
 }
 
 .page :deep(.el-table td.el-table__cell) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .page :deep(.el-table__body tr:hover > td.el-table__cell) {
@@ -707,14 +731,14 @@ onMounted(() => {
 }
 
 .page :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 25px) 0, 100% 25px, 100% 100%, 25px 100%, 0 calc(100% - 25px));
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.15), 0 0 60px rgba(255, 16, 240, 0.1) !important;
 }
 
 .page :deep(.el-dialog__header) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 16px 20px !important;
 }
 
@@ -728,11 +752,11 @@ onMounted(() => {
 .page :deep(.el-dialog__body) {
   background: transparent !important;
   padding: 20px !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-dialog__footer) {
-  border-top: 1px solid #1a1a2e !important;
+  border-top: 1px solid var(--border) !important;
   padding: 12px 20px !important;
 }
 
@@ -743,13 +767,13 @@ onMounted(() => {
 }
 
 .page :deep(.el-input__wrapper) {
-  background: #030303 !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.05) !important;
 }
 
 .page :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -768,9 +792,9 @@ onMounted(() => {
 }
 
 .page :deep(.el-textarea__inner) {
-  background: #030303 !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -784,14 +808,14 @@ onMounted(() => {
 }
 
 .page :deep(.el-input-number) {
-  --el-input-bg-color: #030303;
-  --el-input-border-color: #1a1a2e;
+  --el-input-bg-color: var(--bg-surface);
+  --el-input-border-color: var(--border-subtle);
   --el-input-text-color: #00ffff;
 }
 
 .page :deep(.el-input-number .el-input__wrapper) {
-  background: #030303 !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.1) !important;
 }
 
@@ -803,8 +827,8 @@ onMounted(() => {
 
 .page :deep(.el-input-number__decrease),
 .page :deep(.el-input-number__increase) {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
   color: #00ffff !important;
 }
 
@@ -815,8 +839,8 @@ onMounted(() => {
 
 .page :deep(.el-checkbox) {
   --el-checkbox-bg-color: transparent;
-  --el-checkbox-border-color: #1a1a2e;
-  --el-checkbox-text-color: #e0e0e0;
+  --el-checkbox-border-color: var(--border-subtle);
+  --el-checkbox-text-color: var(--text-primary);
   --el-checkbox-checked-bg-color: rgba(0, 255, 255, 0.1);
   --el-checkbox-checked-border-color: #00ffff;
   --el-checkbox-checked-text-color: #00ffff;
@@ -824,7 +848,7 @@ onMounted(() => {
 
 .page :deep(.el-checkbox__inner) {
   background: transparent !important;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .page :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
@@ -834,18 +858,18 @@ onMounted(() => {
 }
 
 .page :deep(.el-checkbox__label) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .page :deep(.el-date-editor) {
-  --el-input-bg-color: #030303;
+  --el-input-bg-color: var(--bg-surface);
   --el-date-editor-width: 100%;
 }
 
 .page :deep(.el-picker-panel) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
 }
 
@@ -854,7 +878,7 @@ onMounted(() => {
 }
 
 .page :deep(.el-date-table th) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-button) {
@@ -865,8 +889,8 @@ onMounted(() => {
 
 .page :deep(.el-button--default) {
   background: transparent !important;
-  border-color: #1a1a2e !important;
-  color: #e0e0e0 !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-button--default:hover) {
@@ -919,7 +943,7 @@ onMounted(() => {
 .answer-item {
   padding: 12px;
   background: rgba(26, 26, 46, 0.5);
-  border: 1px solid #1a1a2e;
+  border: 1px solid var(--border);
   border-left: 3px solid #00ffff;
   border-radius: 0;
   margin-bottom: 12px;
@@ -929,7 +953,7 @@ onMounted(() => {
   font-size: 14px;
   margin-bottom: 8px;
   white-space: pre-wrap;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -966,25 +990,25 @@ onMounted(() => {
 }
 
 .page :deep(.el-descriptions) {
-  --el-descriptions-table-border: 1px solid #1a1a2e;
+  --el-descriptions-table-border: 1px solid var(--border);
 }
 
 .page :deep(.el-descriptions__label) {
   background: rgba(26, 26, 46, 0.5) !important;
   color: #ff10f0 !important;
   font-family: 'JetBrains Mono', monospace;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .page :deep(.el-descriptions__content) {
   background: transparent !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .page :deep(.el-descriptions__cell) {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .page :deep(.el-timeline) {
@@ -997,7 +1021,7 @@ onMounted(() => {
 }
 
 .page :deep(.el-timeline-item__content) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-timeline-item__timestamp) {
@@ -1006,7 +1030,7 @@ onMounted(() => {
 }
 
 .page :deep(.el-empty__description) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -1029,7 +1053,7 @@ onMounted(() => {
 
 .history-content {
   font-size: 14px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   margin-bottom: 8px;
   white-space: pre-wrap;
   font-family: 'JetBrains Mono', monospace;
@@ -1068,11 +1092,11 @@ onMounted(() => {
 }
 
 ::-webkit-scrollbar-track {
-  background: #030303;
+  background: var(--bg-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a2e;
+  background: var(--bg-surface);
   border-radius: 3px;
 }
 

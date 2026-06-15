@@ -8,6 +8,7 @@ import com.example.edubackend.entity.HomeworkSubmissionContent;
 import com.example.edubackend.entity.StudentSubmission;
 import com.example.edubackend.entity.SysUser;
 import com.example.edubackend.entity.TeacherClassRel;
+import com.example.edubackend.exception.BusinessException;
 import com.example.edubackend.mapper.AssessmentTaskMapper;
 import com.example.edubackend.mapper.HomeworkSubmissionContentMapper;
 import com.example.edubackend.mapper.StudentSubmissionMapper;
@@ -63,14 +64,14 @@ public class FileController {
     @RequireRole({"STUDENT"})
     public Result<String> uploadFile(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
-            return Result.error("文件不能为空");
+            throw new BusinessException(400, "文件不能为空");
         }
         
         Long studentId = UserContext.getUserId();
         String originalFilename = file.getOriginalFilename();
         String ext = getSafeExtension(originalFilename);
         if (ext == null) {
-            return Result.error("不支持的文件类型");
+            throw new BusinessException(400, "不支持的文件类型");
         }
         String newFilename = studentId + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
         
@@ -81,7 +82,7 @@ public class FileController {
             }
             Path targetPath = uploadPath.resolve(newFilename);
             if (!targetPath.normalize().startsWith(uploadPath.normalize())) {
-                return Result.error("文件路径非法");
+                throw new BusinessException(400, "文件路径非法");
             }
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
             log.info("文件上传成功: {} -> {}", originalFilename, newFilename);

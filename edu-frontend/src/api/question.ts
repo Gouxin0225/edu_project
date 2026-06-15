@@ -78,6 +78,20 @@ export interface AiGenerateParams {
   count: number
 }
 
+export interface AiPaperGenerateParams extends AiGenerateParams {
+  context?: string
+  excludeQuestionIds?: number[]
+  preferExisting?: boolean
+}
+
+export interface AiPaperGenerateResult {
+  requestedCount: number
+  existingCount: number
+  aiGeneratedCount: number
+  message: string
+  questions: QuestionRecord[]
+}
+
 // ─── 接口 ────────────────────────────────────────────────
 export const getQuestionList = (params: {
   page: number; size: number
@@ -102,6 +116,11 @@ export const importQuestions = (file: File) => {
 export const aiGenerateQuestions = (data: AiGenerateParams) =>
   request.post<any, { code: number; data: { message: string; count: number } }>(
     '/api/question/ai-generate', data, { timeout: 90000 }
+  )
+
+export const generateAiPaper = (data: AiPaperGenerateParams) =>
+  request.post<any, { code: number; data: AiPaperGenerateResult }>(
+    '/api/question/ai-paper', data, { timeout: 180000 }
   )
 
 export const publishQuestion = (id: number) =>

@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.edubackend.annotation.RequireRole;
 import com.example.edubackend.context.UserContext;
+import com.example.edubackend.dto.AiPaperGenerateDTO;
+import com.example.edubackend.dto.AiPaperGenerateVO;
 import com.example.edubackend.dto.AiGenerateQuestionDTO;
 import com.example.edubackend.dto.CreateQuestionDTO;
 import com.example.edubackend.dto.ImportQuestionDTO;
@@ -17,6 +19,7 @@ import com.example.edubackend.result.Result;
 import com.example.edubackend.mapper.SysUserMapper;
 import com.example.edubackend.service.IAiQuestionService;
 import com.example.edubackend.service.IQuestionBankService;
+import com.example.edubackend.service.OperationAuditLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +31,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @RestController
@@ -41,6 +47,7 @@ public class QuestionBankController {
     private final IAiQuestionService aiQuestionService;
     private final SysUserMapper sysUserMapper;
     private final ObjectMapper objectMapper;
+    private final OperationAuditLogService auditLogService;
 
     @GetMapping("/question/creators")
     @RequireRole({"ADMIN", "TEACHER", "ASSISTANT"})
@@ -61,6 +68,8 @@ public class QuestionBankController {
     public Result<QuestionVO> createQuestion(@Valid @RequestBody CreateQuestionDTO dto) {
         Long userId = UserContext.getUserId();
         QuestionBank question = questionBankService.createQuestion(dto, userId);
+        auditLogService.record("QUESTION_CREATE", "QUESTION", question.getId(),
+                "创建题目 " + question.getContent());
         return Result.success(toVO(question));
     }
 
@@ -91,6 +100,8 @@ public class QuestionBankController {
             throw new BusinessException(403, "只能删除自己的题目");
         }
         questionBankService.deleteQuestion(id);
+        auditLogService.record("QUESTION_DELETE", "QUESTION", id,
+                "删除题目 " + existing.getContent());
         return Result.success();
     }
 
@@ -167,6 +178,50 @@ public class QuestionBankController {
         ));
     }
 
+    @PostMapping("/question/ai-paper")
+    @RequireRole({"ADMIN", "TEACHER", "ASSISTANT"})
+    public Result<AiPaperGenerateVO> aiGeneratePaper(@Valid @RequestBody AiPaperGenerateDTO dto) {
+        SysUser user = UserContext.getUser();
+        Long userId = user.getId();
+        int requestedCount = dto.getCount() == null ? 10 : dto.getCount();
+
+        List<QuestionBank> selected = new ArrayList<>();
+        if (Boolean.TRUE.equals(dto.getPreferExisting())) {
+            selected.addAll(pickExistingQuestions(dto, user, requestedCount));
+        }
+
+        int existingCount = selected.size();
+        int missingCount = Math.max(0, requestedCount - selected.size());
+        List<QuestionBank> generated = new ArrayList<>();
+        if (missingCount > 0) {
+            AiGenerateQuestionDTO aiDto = new AiGenerateQuestionDTO();
+            aiDto.setCourseCategory(dto.getCourseCategory());
+            aiDto.setKnowledgePoint(dto.getKnowledgePoint());
+            aiDto.setContext(dto.getContext());
+            aiDto.setTypes(dto.getTypes());
+            aiDto.setDifficulty(dto.getDifficulty());
+            aiDto.setCount(missingCount);
+
+            generated = aiQuestionService.generateQuestions(aiDto, userId);
+            if (generated.size() > missingCount) {
+                generated = new ArrayList<>(generated.subList(0, missingCount));
+            }
+            for (QuestionBank question : generated) {
+                questionBankService.save(question);
+            }
+            selected.addAll(generated);
+        }
+
+        AiPaperGenerateVO vo = new AiPaperGenerateVO();
+        vo.setRequestedCount(requestedCount);
+        vo.setExistingCount(existingCount);
+        vo.setAiGeneratedCount(generated.size());
+        vo.setQuestions(selected.stream().map(this::toVO).toList());
+        vo.setMessage(String.format("已组卷%d题：题库抽取%d题，AI补齐%d题", selected.size(), existingCount, generated.size()));
+        log.info("用户{}AI组卷完成: 请求{}题, 题库{}题, AI{}题", userId, requestedCount, existingCount, generated.size());
+        return Result.success(vo);
+    }
+
     @PostMapping("/admin/question/{id}/publish")
     @RequireRole("ADMIN")
     public Result<Void> publishQuestion(@PathVariable Long id) {
@@ -186,9 +241,37 @@ public class QuestionBankController {
         vo.setStandardAnswer(question.getStandardAnswer());
         vo.setAnalysis(question.getAnalysis());
         vo.setCreatorId(question.getCreatorId());
+        vo.setIsAiGenerated(question.getIsAiGenerated());
         vo.setIsPublic(question.getIsPublic() != null && question.getIsPublic() == 1);
         vo.setCreateTime(question.getCreateTime());
         return vo;
+    }
+
+    private List<QuestionBank> pickExistingQuestions(AiPaperGenerateDTO dto, SysUser user, int limit) {
+        LambdaQueryWrapper<QuestionBank> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(QuestionBank::getCourseCategory, dto.getCourseCategory());
+        wrapper.in(QuestionBank::getType, dto.getTypes());
+        wrapper.eq(QuestionBank::getDifficulty, dto.getDifficulty());
+        if (StringUtils.hasText(dto.getKnowledgePoint())) {
+            wrapper.like(QuestionBank::getKnowledgePoint, dto.getKnowledgePoint().trim());
+        }
+
+        Set<Long> excludedIds = dto.getExcludeQuestionIds() == null
+                ? Set.of()
+                : new HashSet<>(dto.getExcludeQuestionIds());
+        if (!excludedIds.isEmpty()) {
+            wrapper.notIn(QuestionBank::getId, excludedIds);
+        }
+
+        if (!"ADMIN".equals(user.getRole())) {
+            wrapper.and(w -> w.eq(QuestionBank::getIsPublic, (byte) 1)
+                    .or()
+                    .eq(QuestionBank::getCreatorId, user.getId()));
+        }
+
+        List<QuestionBank> available = questionBankService.list(wrapper);
+        Collections.shuffle(available);
+        return available.size() <= limit ? available : new ArrayList<>(available.subList(0, limit));
     }
 
     private CreateQuestionDTO toCreateDTO(QuestionBank question) {

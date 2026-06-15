@@ -26,8 +26,8 @@
           <template #default="{ row }">
             <el-button size="small" type="primary" text @click="viewDetail(row)" class="cyber-btn-text">查看</el-button>
             <el-button size="small" type="success" text @click="useTemplate(row)" class="cyber-btn-text">使用</el-button>
-            <el-button size="small" type="warning" text :icon="Download" @click="handleDownload(row)" class="cyber-btn-text">导出Excel</el-button>
-            <el-button size="small" type="success" text :icon="Download" @click="handleDownloadWord(row)" class="cyber-btn-text">导出Word(小鹅通)</el-button>
+            <el-button size="small" type="warning" text :icon="Download" @click="handleDownload(row)" class="cyber-btn-text">下载试卷Excel</el-button>
+            <el-button size="small" type="success" text :icon="Download" @click="handleDownloadWord(row)" class="cyber-btn-text">下载试卷Word</el-button>
             <el-button size="small" type="danger" text @click="handleDelete(row)" class="cyber-btn-text">删除</el-button>
           </template>
         </el-table-column>
@@ -92,12 +92,29 @@
         <el-form-item label="考试标题" required>
           <el-input v-model="createForm.title" placeholder="请输入考试标题" class="cyber-input" />
         </el-form-item>
+        <el-form-item label="目标班级" required>
+          <el-select
+            v-model="createForm.targetClassIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择考试发布班级"
+            class="cyber-select"
+          >
+            <el-option
+              v-for="classItem in classList"
+              :key="classItem.id"
+              :label="classItem.className"
+              :value="classItem.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="截止时间" required>
           <el-date-picker
             v-model="createForm.endTime"
             type="datetime"
             placeholder="选择截止时间"
-            value-format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DDTHH:mm:ss"
             class="cyber-date-picker"
           />
         </el-form-item>
@@ -106,7 +123,7 @@
             v-model="createForm.startTime"
             type="datetime"
             placeholder="选择开始时间（可选）"
-            value-format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DDTHH:mm:ss"
             class="cyber-date-picker"
           />
         </el-form-item>
@@ -121,10 +138,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { Download, Plus } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { getTemplateList, getTemplateQuestions, deleteTemplate, createExamFromTemplate, type Template, type TemplateQuestion } from '@/api/template'
+import { getMyClasses, type TeacherClass } from '@/api/teacher'
 import { downloadAuthorizedFile } from '@/utils/download'
 
 const router = useRouter()
@@ -139,11 +158,13 @@ const templateQuestions = ref<TemplateQuestion[]>([])
 const questionsLoading = ref(false)
 
 const showCreateDialog = ref(false)
+const classList = ref<TeacherClass[]>([])
 const createForm = reactive({
   templateId: undefined as number | undefined,
   title: '',
   startTime: '',
-  endTime: ''
+  endTime: '',
+  targetClassIds: [] as number[]
 })
 const creating = ref(false)
 
@@ -180,6 +201,7 @@ function useTemplate(row: Template) {
   createForm.title = row.name + ' - 考试'
   createForm.startTime = ''
   createForm.endTime = ''
+  createForm.targetClassIds = defaultTargetClassIds()
   showCreateDialog.value = true
 }
 
@@ -203,6 +225,10 @@ async function handleCreateExam() {
     ElMessage.warning('请选择截止时间')
     return
   }
+  if (createForm.targetClassIds.length === 0) {
+    ElMessage.warning('请至少选择一个目标班级')
+    return
+  }
   
   creating.value = true
   try {
@@ -210,7 +236,8 @@ async function handleCreateExam() {
       templateId: createForm.templateId,
       title: createForm.title,
       startTime: createForm.startTime || undefined,
-      endTime: createForm.endTime
+      endTime: createForm.endTime,
+      targetClassIds: createForm.targetClassIds
     })
     ElMessage.success('考试创建成功')
     showCreateDialog.value = false
@@ -272,7 +299,23 @@ function difficultyType(d: string) {
   return map[d] || ''
 }
 
-onMounted(fetchList)
+function defaultTargetClassIds() {
+  return classList.value.length === 1 ? [classList.value[0].id] : []
+}
+
+async function fetchClasses() {
+  try {
+    const res = await getMyClasses()
+    classList.value = res.data || []
+  } catch {
+    ElMessage.error('获取班级列表失败')
+  }
+}
+
+onMounted(() => {
+  fetchList()
+  fetchClasses()
+})
 </script>
 
 <style scoped>
@@ -280,7 +323,7 @@ onMounted(fetchList)
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: #030303 !important;
+  background: var(--bg-surface) !important;
   min-height: 100vh;
   padding: 16px;
   font-family: 'JetBrains Mono', monospace !important;
@@ -307,8 +350,8 @@ onMounted(fetchList)
 }
 
 .cyber-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px)) !important;
   font-family: 'JetBrains Mono', monospace !important;
@@ -316,35 +359,35 @@ onMounted(fetchList)
 
 .cyber-card :deep(.el-card__header) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.1) 0%, transparent 100%) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 16px 20px !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-card :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   padding: 20px !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-table {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   font-family: 'JetBrains Mono', monospace !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-table :deep(.el-table__header-wrapper th) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.15) 0%, rgba(255, 16, 240, 0.05) 100%) !important;
   color: #00ffff !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
   font-weight: 600 !important;
 }
 
 .cyber-table :deep(.el-table__body-wrapper td) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -395,9 +438,9 @@ onMounted(fetchList)
 }
 
 .cyber-pagination :deep(.el-pager li) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -417,14 +460,14 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.2) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__header) {
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.1) 0%, rgba(255, 16, 240, 0.05) 100%) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__title) {
@@ -434,8 +477,8 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
   padding: 24px !important;
 }
 
@@ -445,8 +488,8 @@ onMounted(fetchList)
 }
 
 .cyber-form :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-form :deep(.el-input__wrapper:hover) {
@@ -454,23 +497,23 @@ onMounted(fetchList)
 }
 
 .cyber-form :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-form :deep(.el-select .el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-divider {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .cyber-divider :deep(.el-divider__text) {
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace !important;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .pagination-wrap {
@@ -484,26 +527,26 @@ onMounted(fetchList)
 }
 
 .cyber-date-picker :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-select :deep(.el-input__wrapper) {
-  background-color: #0a0a0a !important;
-  box-shadow: 0 0 0 1px #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: 0 0 0 1px var(--border) !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions__label) {
   background: rgba(0, 255, 255, 0.1) !important;
   color: #00ffff !important;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-descriptions :deep(.el-descriptions__content) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 </style>

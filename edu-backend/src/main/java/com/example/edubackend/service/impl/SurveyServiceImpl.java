@@ -25,6 +25,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SurveyServiceImpl implements ISurveyService {
 
+    private static final String FIVE_POINT_OPTIONS_JSON = "[1,2,3,4,5]";
+    private static final List<FixedSurveyQuestion> FIXED_SURVEY_QUESTIONS = List.of(
+            new FixedSurveyQuestion("STAR", "您对这次授课讲师打几分？满分5分"),
+            new FixedSurveyQuestion("STAR", "您对讲师授课的逻辑性打几分？满分5分"),
+            new FixedSurveyQuestion("STAR", "您对讲师上课的趣味性打几分？满分5分"),
+            new FixedSurveyQuestion("STAR", "讲师对学员关系度打几分？满分5分"),
+            new FixedSurveyQuestion("STAR", "讲师理论与工程结合能力您打几分？满分5分"),
+            new FixedSurveyQuestion("TEXT", "您对授课讲师的建议")
+    );
+
     private final SurveyTaskMapper surveyTaskMapper;
     private final SurveyQuestionMapper surveyQuestionMapper;
     private final SurveyRecordMapper surveyRecordMapper;
@@ -40,6 +50,7 @@ public class SurveyServiceImpl implements ISurveyService {
         if (dto.getEndTime() == null) {
             throw new BusinessException(400, "截止时间不能为空");
         }
+        validateFixedQuestionConfig(dto.getQuestions());
         assertCanTargetClasses(dto.getTargetClassIds(), creatorId);
         
         SurveyTask survey = new SurveyTask();
@@ -70,20 +81,44 @@ public class SurveyServiceImpl implements ISurveyService {
         
         surveyTaskMapper.insert(survey);
         
-        if (dto.getQuestions() != null && !dto.getQuestions().isEmpty()) {
-            for (CreateSurveyDTO.QuestionConfig qc : dto.getQuestions()) {
-                SurveyQuestion question = new SurveyQuestion();
-                question.setSurveyId(survey.getId());
-                question.setType(qc.getType());
-                question.setTitle(qc.getTitle());
-                question.setOptionsJson(normalizeQuestionOptions(qc.getType(), qc.getOptionsJson()));
-                question.setIsRequired(qc.getIsRequired() != null ? qc.getIsRequired() : 0);
-                question.setSortOrder(qc.getSortOrder() != null ? qc.getSortOrder() : 0);
-                surveyQuestionMapper.insert(question);
-            }
+        for (int i = 0; i < FIXED_SURVEY_QUESTIONS.size(); i++) {
+            FixedSurveyQuestion fixed = FIXED_SURVEY_QUESTIONS.get(i);
+            SurveyQuestion question = new SurveyQuestion();
+            question.setSurveyId(survey.getId());
+            question.setType(fixed.type());
+            question.setTitle(fixed.title());
+            question.setOptionsJson(defaultFixedQuestionOptions(fixed.type()));
+            question.setIsRequired((byte) 1);
+            question.setSortOrder(i + 1);
+            surveyQuestionMapper.insert(question);
         }
         
         return survey.getId();
+    }
+
+    private void validateFixedQuestionConfig(List<CreateSurveyDTO.QuestionConfig> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return;
+        }
+        if (questions.size() != FIXED_SURVEY_QUESTIONS.size()) {
+            throw new BusinessException(400, "当前仅支持固定问卷题目");
+        }
+        for (int i = 0; i < FIXED_SURVEY_QUESTIONS.size(); i++) {
+            FixedSurveyQuestion fixed = FIXED_SURVEY_QUESTIONS.get(i);
+            CreateSurveyDTO.QuestionConfig question = questions.get(i);
+            if (question == null
+                    || !fixed.type().equalsIgnoreCase(question.getType())
+                    || !fixed.title().equals(question.getTitle())) {
+                throw new BusinessException(400, "当前仅支持固定问卷题目");
+            }
+        }
+    }
+
+    private String defaultFixedQuestionOptions(String type) {
+        if ("STAR".equalsIgnoreCase(type) || "SCALE".equalsIgnoreCase(type)) {
+            return FIVE_POINT_OPTIONS_JSON;
+        }
+        return "[]";
     }
 
     private String normalizeQuestionOptions(String type, String optionsJson) {
@@ -688,4 +723,6 @@ public class SurveyServiceImpl implements ISurveyService {
             throw new BusinessException(403, "只能发布到自己负责的班级");
         }
     }
+
+    private record FixedSurveyQuestion(String type, String title) {}
 }

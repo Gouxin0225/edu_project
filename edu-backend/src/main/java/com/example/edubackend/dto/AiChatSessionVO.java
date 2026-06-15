@@ -11,6 +11,7 @@ public class AiChatSessionVO {
     private String courseCategory;
     private String knowledgePoint;
     private String userRole;
+    private Boolean isTop;
     private LocalDateTime lastMessageTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

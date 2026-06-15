@@ -110,6 +110,7 @@ public class QuestionBankServiceImpl extends ServiceImpl<QuestionBankMapper, Que
             vo.setStandardAnswer(q.getStandardAnswer());
             vo.setAnalysis(q.getAnalysis());
             vo.setCreatorId(q.getCreatorId());
+            vo.setIsAiGenerated(q.getIsAiGenerated());
             vo.setIsPublic(q.getIsPublic() != null && q.getIsPublic() == 1);
             vo.setCreateTime(q.getCreateTime());
             

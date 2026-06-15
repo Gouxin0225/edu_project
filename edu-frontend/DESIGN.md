@@ -1,4 +1,4 @@
-# 智能教育管理系统 · 设计规范
+# 慧学助手 · 设计规范
 # DESIGN SPEC — TECH GLASS THEME
 
 ---

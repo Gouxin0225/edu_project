@@ -54,14 +54,24 @@
           <el-progress :percentage="completionRate" :stroke-width="10" />
           <div class="progress-actions">
             <span>未交 {{ progress.pendingCount }} 人</span>
-            <el-button
-              type="primary"
-              size="small"
-              :disabled="!progress.unsubmittedStudents.length"
-              @click="remindAll"
-            >
-              一键催交
-            </el-button>
+            <div class="action-group">
+              <el-button
+                size="small"
+                :icon="Download"
+                :disabled="!progress.unsubmittedStudents.length"
+                @click="exportUnsubmitted"
+              >
+                导出未交名单
+              </el-button>
+              <el-button
+                type="primary"
+                size="small"
+                :disabled="!progress.unsubmittedStudents.length"
+                @click="remindAll"
+              >
+                一键催交
+              </el-button>
+            </div>
           </div>
         </div>
 
@@ -177,8 +187,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Finished, Refresh, Timer, User } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { Document, Download, Finished, Refresh, Timer, User } from '@element-plus/icons-vue'
 import {
   addAssistantSubmissionComment,
   getAssistantHomeworkList,
@@ -191,6 +202,7 @@ import {
   type HomeworkSubmissionDetail,
   type HomeworkSubmissionItem
 } from '@/api/homework'
+import { exportRowsToXlsx } from '@/utils/exportRows'
 
 const loading = ref(false)
 const detailLoading = ref(false)
@@ -286,6 +298,21 @@ async function remindAll() {
   ElMessage.success('已记录催交')
 }
 
+async function exportUnsubmitted() {
+  if (!currentHomework.value || !progress.value?.unsubmittedStudents.length) return
+  await exportRowsToXlsx(
+    `${currentHomework.value.title}-未交名单.xlsx`,
+    [
+      { label: '作业标题', prop: () => currentHomework.value?.title || '' },
+      { label: '学生姓名', prop: 'studentName' },
+      { label: '账号', prop: 'username' },
+      { label: '状态', prop: () => '未提交' },
+      { label: '截止时间', prop: () => formatTime(currentHomework.value?.deadline) }
+    ],
+    progress.value.unsubmittedStudents
+  )
+}
+
 async function viewSubmission(row: HomeworkSubmissionItem) {
   if (!currentHomework.value) return
   const res = await getAssistantHomeworkSubmissionDetail(currentHomework.value.homeworkId, row.submissionId)
@@ -358,14 +385,14 @@ onMounted(fetchHomeworkList)
 .detail-head h3,
 .panel-header h4 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   letter-spacing: 0;
 }
 
 .page-header p,
 .detail-head p {
   margin: 6px 0 0;
-  color: rgba(226, 232, 240, 0.58);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -379,11 +406,9 @@ onMounted(fetchHomeworkList)
 .homework-list,
 .detail-panel,
 .panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(12, 20, 40, 0.74);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(14px);
+  background: var(--surface-card);
 }
 
 .summary-card {
@@ -400,20 +425,20 @@ onMounted(fetchHomeworkList)
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: rgba(64, 128, 255, 0.12);
-  color: #8bb5ff;
+  background: var(--primary-dim);
+  color: var(--primary-light);
 }
 
 .summary-card strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
 }
 
 .summary-card span,
 .panel-header span {
-  color: rgba(226, 232, 240, 0.54);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -433,10 +458,10 @@ onMounted(fetchHomeworkList)
 
 .homework-item {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  color: inherit;
+  background: transparent;
+  color: var(--text-primary);
   cursor: pointer;
   padding: 12px;
   text-align: left;
@@ -445,14 +470,14 @@ onMounted(fetchHomeworkList)
 
 .homework-item:hover,
 .homework-item.active {
-  border-color: rgba(64, 128, 255, 0.38);
-  background: rgba(64, 128, 255, 0.1);
+  border-color: var(--primary);
+  background: var(--primary-dim);
 }
 
 .item-title {
   display: block;
   overflow: hidden;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -461,12 +486,12 @@ onMounted(fetchHomeworkList)
 .item-meta,
 .item-stats {
   margin-top: 8px;
-  color: rgba(226, 232, 240, 0.52);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .item-stats em {
-  color: #fbbf24;
+  color: var(--color-danger);
   font-style: normal;
 }
 
@@ -483,19 +508,27 @@ onMounted(fetchHomeworkList)
 .progress-block {
   margin-top: 16px;
   padding: 14px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-base);
 }
 
 .progress-top strong {
-  color: #bfdbfe;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .progress-actions {
   margin-top: 12px;
-  color: rgba(226, 232, 240, 0.62);
+  color: var(--text-secondary);
   font-size: 13px;
+}
+
+.action-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .split-grid {
@@ -516,22 +549,22 @@ onMounted(fetchHomeworkList)
 
 .content-section h4 {
   margin: 0 0 10px;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .text-box {
   white-space: pre-wrap;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.82);
+  background: var(--bg-base);
+  color: var(--text-primary);
   padding: 12px;
 }
 
 .content-section a {
   display: block;
   margin-top: 8px;
-  color: #8bb5ff;
+  color: var(--primary-light);
 }
 
 @media (max-width: 1180px) {

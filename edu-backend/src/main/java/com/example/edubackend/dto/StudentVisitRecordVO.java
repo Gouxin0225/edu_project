@@ -19,6 +19,10 @@ public class StudentVisitRecordVO {
     private String visitMethod;
     private String visitResult;
     private String content;
+    private String problemCategory;
+    private String conclusion;
+    private String attachmentUrl;
+    private Boolean resolved;
     private LocalDateTime nextFollowTime;
     private LocalDateTime visitTime;
     private LocalDateTime createTime;

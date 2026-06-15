@@ -244,7 +244,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Plus, UserFilled, Search, Refresh } from '@element-plus/icons-vue'
 import {
@@ -494,15 +495,15 @@ onMounted(fetchList)
   flex-direction: column;
   gap: 16px;
   font-family: 'JetBrains Mono', monospace;
-  background: #0a0a0a;
+  background: var(--bg-surface);
   min-height: 100vh;
   padding: 16px;
 }
 
 /* Cyber Card */
 .cyber-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5) !important;
@@ -535,9 +536,9 @@ onMounted(fetchList)
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 13px !important;
   font-weight: 500 !important;
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   padding: 8px 16px !important;
@@ -547,7 +548,7 @@ onMounted(fetchList)
 }
 
 .cyber-btn:hover {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
   border-color: #00ffff !important;
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.3) !important;
   color: #00ffff !important;
@@ -595,8 +596,8 @@ onMounted(fetchList)
 }
 
 .cyber-input :deep(.el-input__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px) !important;
@@ -614,12 +615,12 @@ onMounted(fetchList)
 
 .cyber-input :deep(.el-input__inner) {
   font-family: 'JetBrains Mono', monospace !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-size: 13px !important;
 }
 
 .cyber-input :deep(.el-input__inner::placeholder) {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
 }
 
 .cyber-input :deep(.el-input__prefix) {
@@ -628,8 +629,8 @@ onMounted(fetchList)
 
 /* Cyber Select */
 .cyber-select :deep(.el-select__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px) !important;
@@ -647,26 +648,26 @@ onMounted(fetchList)
 }
 
 .cyber-select :deep(.el-select__selected-item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-select :deep(.el-select__placeholder) {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
 }
 
 .cyber-select :deep(.el-select__dropdown) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
 }
 
 .cyber-select :deep(.el-select-dropdown__item) {
   font-family: 'JetBrains Mono', monospace !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-select :deep(.el-select-dropdown__item:hover) {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
   color: #00ffff !important;
 }
 
@@ -679,26 +680,26 @@ onMounted(fetchList)
 .cyber-table {
   font-family: 'JetBrains Mono', monospace !important;
   background: transparent !important;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
 }
 
 .cyber-table :deep(.el-table__header-wrapper) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .cyber-table :deep(.el-table__header) {
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .cyber-table :deep(.el-table__header th) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   color: #00ffff !important;
   font-weight: 600 !important;
   font-size: 13px !important;
   text-transform: uppercase;
   letter-spacing: 1px;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 12px 8px !important;
   text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
 }
@@ -713,9 +714,9 @@ onMounted(fetchList)
 
 .cyber-table :deep(.el-table__body td) {
   background: transparent !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-size: 13px !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 10px 8px !important;
 }
 
@@ -732,7 +733,7 @@ onMounted(fetchList)
 }
 
 .cyber-table :deep(.el-table__empty-text) {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
@@ -762,13 +763,13 @@ onMounted(fetchList)
 
 .cyber-tag-info {
   background: rgba(102, 102, 102, 0.1) !important;
-  color: #999 !important;
+  color: var(--text-secondary) !important;
   border: 1px solid rgba(102, 102, 102, 0.3) !important;
 }
 
 .cyber-text-info {
   font-family: 'JetBrains Mono', monospace !important;
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   font-size: 13px !important;
 }
 
@@ -778,25 +779,25 @@ onMounted(fetchList)
 }
 
 .cyber-pagination :deep(.el-pagination__total) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-size: 13px !important;
 }
 
 .cyber-pagination :deep(.el-pagination__sizes) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pagination__sizes .el-input__inner) {
   font-family: 'JetBrains Mono', monospace !important;
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pager li) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 13px !important;
   border-radius: 0 !important;
@@ -818,21 +819,21 @@ onMounted(fetchList)
 }
 
 .cyber-pagination :deep(.el-pagination__jump) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .cyber-pagination :deep(.el-pagination__editor) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
 .cyber-pagination :deep(.btn-prev),
 .cyber-pagination :deep(.btn-next) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   border-radius: 0 !important;
 }
 
@@ -852,15 +853,15 @@ onMounted(fetchList)
 /* Cyber Dialog */
 .cyber-dialog {
   font-family: 'JetBrains Mono', monospace !important;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));
   box-shadow: 0 0 40px rgba(0, 255, 255, 0.2), 0 0 80px rgba(255, 16, 240, 0.1) !important;
 }
 
 .cyber-dialog :deep(.el-dialog__header) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 16px 20px !important;
 }
 
@@ -874,7 +875,7 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-size: 18px !important;
 }
 
@@ -884,14 +885,14 @@ onMounted(fetchList)
 }
 
 .cyber-dialog :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
   padding: 20px !important;
 }
 
 .cyber-dialog :deep(.el-dialog__footer) {
-  background: #0a0a0a !important;
-  border-top: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-top: 1px solid var(--border) !important;
   padding: 16px 20px !important;
 }
 
@@ -906,7 +907,7 @@ onMounted(fetchList)
 
 /* Cyber Divider */
 .cyber-divider {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
   margin: 16px 0 !important;
 }
 
@@ -954,8 +955,8 @@ onMounted(fetchList)
 .el-select-dropdown__item,
 .el-popper.is-light,
 .el-popper__popper {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
 }
 
 .el-select-dropdown__item.selected {
@@ -965,7 +966,7 @@ onMounted(fetchList)
 /* Override Element Plus Input Internal White Background */
 .el-input__wrapper,
 .el-input__inner {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 /* Override Element Plus Table Internal White Background */
@@ -982,7 +983,7 @@ onMounted(fetchList)
 .el-dialog__header,
 .el-dialog__body,
 .el-dialog__footer {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 /* Override Element Plus Form Internal White Background */
@@ -998,13 +999,13 @@ onMounted(fetchList)
 
 /* Override Element Plus Tag Internal White Background */
 .el-tag {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 /* Message Box Override */
 :deep(.el-message-box) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
 }
 
@@ -1013,7 +1014,7 @@ onMounted(fetchList)
 }
 
 :deep(.el-message-box__content) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 </style>

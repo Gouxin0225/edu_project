@@ -32,5 +32,7 @@ public class StudentExamResultVO {
         private Boolean isCorrect;
         private BigDecimal scoreGained;
         private String analysis;
+        private BigDecimal aiSuggestScore;
+        private String aiSuggestDetail;
     }
 }

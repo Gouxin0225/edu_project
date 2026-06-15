@@ -33,7 +33,10 @@
       <div class="panel">
         <div class="panel-header">
           <h3>近期任务进度</h3>
-          <el-button text type="primary" @click="router.push('/assistant/homework')">查看作业跟踪</el-button>
+          <div class="panel-actions">
+            <el-button text type="primary" @click="router.push('/assistant/exams')">考试跟踪</el-button>
+            <el-button text type="primary" @click="router.push('/assistant/homework')">作业跟踪</el-button>
+          </div>
         </div>
         <div class="task-list">
           <div v-for="task in statistics.recentTasks" :key="task.taskId" class="task-row">
@@ -60,6 +63,9 @@
                 <span>待批 {{ task.pendingGradeCount }}</span>
                 <span>均分 {{ formatNumber(task.averageScore) }}</span>
               </div>
+              <el-button size="small" text type="primary" @click="goTaskDetail(task)">
+                查看明细
+              </el-button>
             </div>
           </div>
           <el-empty v-if="statistics.recentTasks.length === 0" description="暂无任务数据" :image-size="80" />
@@ -69,7 +75,7 @@
       <div class="panel">
         <div class="panel-header">
           <h3>风险学生</h3>
-          <span>缺交、低分、切屏综合排序</span>
+          <el-button text type="primary" @click="router.push('/assistant/students')">查看全部</el-button>
         </div>
         <el-table :data="statistics.riskStudents" size="small" max-height="440">
           <el-table-column prop="studentName" label="学生" min-width="90" />
@@ -79,6 +85,11 @@
           <el-table-column prop="switchScreenCount" label="切屏" width="70" />
           <el-table-column label="均分" width="80">
             <template #default="{ row }">{{ formatNumber(row.averageScore) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" fixed="right">
+            <template #default>
+              <el-button text type="primary" size="small" @click="router.push('/assistant/students')">跟进</el-button>
+            </template>
           </el-table-column>
         </el-table>
       </div>
@@ -101,13 +112,18 @@
             <template #default="{ row }">{{ formatNumber(row.averageScore) }}</template>
           </el-table-column>
           <el-table-column prop="riskCount" label="风险" width="70" />
+          <el-table-column label="操作" width="80" fixed="right">
+            <template #default="{ row }">
+              <el-button text type="primary" size="small" @click="selectClass(row.classId)">查看</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
 
       <div class="panel">
         <div class="panel-header">
           <h3>成绩分布</h3>
-          <span>已评分提交</span>
+          <el-button text type="primary" @click="router.push('/assistant/exams')">成绩明细</el-button>
         </div>
         <div class="distribution-list">
           <div v-for="item in statistics.scoreDistribution" :key="item.range" class="distribution-row">
@@ -123,7 +139,7 @@
       <div class="panel">
         <div class="panel-header">
           <h3>AI 与问卷</h3>
-          <span>学生使用和反馈概览</span>
+          <el-button text type="primary" @click="router.push('/assistant/surveys')">问卷明细</el-button>
         </div>
         <div class="mini-grid">
           <div>
@@ -151,7 +167,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { Collection, DataLine, Document, Finished, Refresh, School, TrendCharts, User } from '@element-plus/icons-vue'
 import { getTeacherStatistics, type TeacherStatistics } from '@/api/teacher'
 
@@ -218,6 +234,15 @@ async function fetchStatistics() {
   }
 }
 
+function goTaskDetail(task: { type: string }) {
+  router.push(task.type === 'EXAM' ? '/assistant/exams' : '/assistant/homework')
+}
+
+function selectClass(classId: number) {
+  selectedClassId.value = classId
+  fetchStatistics()
+}
+
 function normalizePercent(value?: number) {
   return Math.max(0, Math.min(100, Number(value || 0)))
 }
@@ -266,14 +291,14 @@ onMounted(fetchStatistics)
 
 .stats-header h2 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 24px;
   letter-spacing: 0;
 }
 
 .stats-header p {
   margin: 6px 0 0;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -289,10 +314,10 @@ onMounted(fetchStatistics)
 
 .metric-card,
 .panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(12, 20, 40, 0.74);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  background: var(--surface-card);
+  box-shadow: var(--card-shadow);
   backdrop-filter: blur(14px);
 }
 
@@ -310,14 +335,14 @@ onMounted(fetchStatistics)
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: rgba(64, 128, 255, 0.12);
-  color: #8bb5ff;
+  background: var(--primary-dim);
+  color: var(--primary-light);
 }
 
 .metric-card strong,
 .mini-grid strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
 }
@@ -325,7 +350,7 @@ onMounted(fetchStatistics)
 .metric-card span,
 .panel-header span,
 .mini-grid span {
-  color: rgba(226, 232, 240, 0.54);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -353,7 +378,7 @@ onMounted(fetchStatistics)
 
 .panel-header h3 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 15px;
 }
 
@@ -367,9 +392,9 @@ onMounted(fetchStatistics)
   grid-template-columns: minmax(0, 1fr) 260px;
   gap: 16px;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-muted);
   padding: 12px;
 }
 
@@ -379,7 +404,7 @@ onMounted(fetchStatistics)
 
 .task-title span:last-child {
   overflow: hidden;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -389,7 +414,7 @@ onMounted(fetchStatistics)
 .progress-foot,
 .progress-top {
   justify-content: space-between;
-  color: rgba(226, 232, 240, 0.52);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -403,7 +428,7 @@ onMounted(fetchStatistics)
 }
 
 .progress-top strong {
-  color: #bfdbfe;
+  color: var(--primary-light);
 }
 
 .progress-foot {
@@ -417,14 +442,14 @@ onMounted(fetchStatistics)
 
 .distribution-row {
   grid-template-columns: 54px minmax(0, 1fr) 34px;
-  color: rgba(226, 232, 240, 0.72);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .bar-track {
   height: 9px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-muted);
   overflow: hidden;
 }
 
@@ -435,7 +460,7 @@ onMounted(fetchStatistics)
 }
 
 .distribution-row em {
-  color: #bfdbfe;
+  color: var(--primary-light);
   font-family: 'JetBrains Mono', monospace;
   font-style: normal;
   text-align: right;
@@ -449,7 +474,7 @@ onMounted(fetchStatistics)
 
 .mini-grid div {
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-muted);
   padding: 12px;
 }
 

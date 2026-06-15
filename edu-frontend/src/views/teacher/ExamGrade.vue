@@ -8,7 +8,13 @@
             <el-button text @click="$router.back()">返回</el-button>
           </div>
           <div class="header-actions">
-            <el-button type="success" :loading="publishing" @click="handlePublish">
+            <el-button
+              type="success"
+              :loading="publishing"
+              :disabled="pendingSubmissions.length > 0"
+              :title="pendingSubmissions.length > 0 ? '仍有待批改答卷，不能发布成绩' : '发布成绩'"
+              @click="handlePublish"
+            >
               发布成绩
             </el-button>
           </div>
@@ -29,13 +35,13 @@
         </el-col>
         <el-col :span="6">
           <div class="stat-item">
-            <div class="stat-value">{{ statistics ? `${(statistics.passRate * 100).toFixed(0)}%` : '-' }}</div>
+            <div class="stat-value">{{ statistics ? formatPassRate(statistics.passRate) : '-' }}</div>
             <div class="stat-label">及格率</div>
           </div>
         </el-col>
         <el-col :span="6">
           <div class="stat-item">
-            <div class="stat-value">{{ statistics?.gradedCount || 0 }}/{{ statistics?.submittedCount || 0 }}</div>
+            <div class="stat-value">{{ submittedGradeCountText }}</div>
             <div class="stat-label">已批改/总提交</div>
           </div>
         </el-col>
@@ -49,11 +55,20 @@
             <span>学生列表</span>
           </template>
           <div v-loading="loadingSubmissions">
+            <el-tabs v-model="activeSubmissionTab" class="grade-tabs">
+              <el-tab-pane :label="`待批改 ${pendingSubmissions.length}`" name="pending" />
+              <el-tab-pane :label="`已批改 ${gradedSubmissions.length}`" name="graded" />
+              <el-tab-pane :label="`答题中 ${inProgressSubmissions.length}`" name="inProgress" />
+              <el-tab-pane :label="`全部 ${submissions.length}`" name="all" />
+            </el-tabs>
             <div v-if="submissions.length === 0" class="empty-tip">
               暂无提交
             </div>
+            <div v-else-if="displaySubmissions.length === 0" class="empty-tip compact">
+              当前分组暂无学生
+            </div>
             <div
-              v-for="item in submissions"
+              v-for="item in displaySubmissions"
               :key="item.submissionId"
               class="student-item"
               :class="{ active: selectedSubmissionId === item.submissionId }"
@@ -79,7 +94,12 @@
       <el-col :span="16">
         <el-card shadow="never" class="answer-card">
           <template #header>
-            <span>答卷详情 - {{ currentStudentName }}</span>
+            <div class="answer-card-title">
+              <span>答卷详情 - {{ currentStudentName || '未选择学生' }}</span>
+              <el-tag v-if="submissionDetail" :type="getStatusType(submissionDetail.status)" size="small">
+                {{ getStatusText(submissionDetail.status) }}
+              </el-tag>
+            </div>
           </template>
           <div v-loading="loadingDetail">
             <div v-if="!selectedSubmissionId" class="empty-tip">
@@ -102,12 +122,25 @@
                   <div class="question-content">
                     <div class="content-text">{{ answer.content }}</div>
 
+                    <div class="answer-section" v-if="formatOptions(answer.optionsJson).length">
+                      <div class="section-title">题目选项：</div>
+                      <div class="option-list">
+                        <div v-for="option in formatOptions(answer.optionsJson)" :key="option" class="option-item">
+                          {{ option }}
+                        </div>
+                      </div>
+                    </div>
+
                     <div class="answer-section">
                       <div class="section-title">学生答案：</div>
-                      <div class="answer-text student-answer" v-if="answer.type !== 'SHORT' && answer.type !== 'CODE'">
+                      <div
+                        class="answer-text student-answer"
+                        :class="{ empty: !answer.studentAnswer }"
+                        v-if="answer.type !== 'SHORT' && answer.type !== 'CODE'"
+                      >
                         {{ formatAnswer(answer.studentAnswer, answer.type, answer.optionsJson) }}
                       </div>
-                      <div class="answer-text student-answer short-answer" v-else>
+                      <div class="answer-text student-answer short-answer" :class="{ empty: !answer.studentAnswer }" v-else>
                         {{ answer.studentAnswer || '(未作答)' }}
                       </div>
                     </div>
@@ -212,8 +245,11 @@
               </div>
 
               <div class="submit-grade-btn" v-if="hasSubjectiveAnswers">
+                <el-button type="success" size="large" :icon="MagicStick" :loading="aiBatchLoading" @click="handleAiSuggestAll()">
+                  AI建议全部主观题
+                </el-button>
                 <el-button type="primary" size="large" :loading="submitting" @click="handleSubmitGrade">
-                  提交批改
+                  {{ submissionDetail?.status === 'GRADED' || submissionDetail?.status === 'RETURNED' ? '保存修订' : '提交批改' }}
                 </el-button>
               </div>
             </div>
@@ -225,8 +261,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { MagicStick } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import {
@@ -249,6 +285,7 @@ const examId = Number(route.params.id)
 
 const examTitle = ref('')
 const submissions = ref<SubmissionItem[]>([])
+const activeSubmissionTab = ref<'pending' | 'graded' | 'inProgress' | 'all'>('pending')
 const selectedSubmissionId = ref<number | null>(null)
 const currentStudentName = ref('')
 const submissionDetail = ref<SubmissionDetail | null>(null)
@@ -257,6 +294,7 @@ const loadingSubmissions = ref(false)
 const loadingDetail = ref(false)
 const submitting = ref(false)
 const publishing = ref(false)
+const aiBatchLoading = ref(false)
 
 const gradeMap = ref<Record<number, number>>({})
 const aiLoadingMap = reactive<Record<number, boolean>>({})
@@ -266,12 +304,26 @@ const statistics = ref<{
   averageScore: number
   highestScore: number
   passRate: number
-  gradedCount: number
-  submittedCount: number
 } | null>(null)
 
 const hasSubjectiveAnswers = computed(() => {
-  return submissionDetail.value?.answers.some(a => a.type === 'SHORT' || a.type === 'CODE') ?? false
+  return submissionDetail.value?.answers.some(isSubjectiveAnswer) ?? false
+})
+
+const subjectiveAnswers = computed(() =>
+  submissionDetail.value?.answers.filter(isSubjectiveAnswer) ?? []
+)
+
+const pendingSubmissions = computed(() => submissions.value.filter(item => item.status === 'SUBMITTED'))
+const gradedSubmissions = computed(() => submissions.value.filter(item => item.status === 'GRADED' || item.status === 'RETURNED'))
+const inProgressSubmissions = computed(() => submissions.value.filter(item => item.status === 'UN'))
+const submittedSubmissions = computed(() => submissions.value.filter(item => item.status !== 'UN'))
+const submittedGradeCountText = computed(() => `${gradedSubmissions.value.length}/${submittedSubmissions.value.length}`)
+const displaySubmissions = computed(() => {
+  if (activeSubmissionTab.value === 'pending') return pendingSubmissions.value
+  if (activeSubmissionTab.value === 'graded') return gradedSubmissions.value
+  if (activeSubmissionTab.value === 'inProgress') return inProgressSubmissions.value
+  return submissions.value
 })
 
 async function fetchExamInfo() {
@@ -288,6 +340,12 @@ async function fetchSubmissions() {
   try {
     const res = await getExamSubmissions(examId)
     submissions.value = res.data || []
+    if (!selectedSubmissionId.value && submissions.value.length > 0) {
+      const first = pendingSubmissions.value[0] || gradedSubmissions.value[0] || inProgressSubmissions.value[0] || submissions.value[0]
+      if (first) {
+        await selectSubmission(first)
+      }
+    }
   } catch {
     ElMessage.error('获取提交列表失败')
   } finally {
@@ -311,6 +369,7 @@ async function selectSubmission(item: SubmissionItem) {
 
 async function fetchSubmissionDetail(submissionId: number) {
   loadingDetail.value = true
+  aiBatchLoading.value = false
   gradeMap.value = {}
   Object.keys(aiSuggestMap).forEach(key => delete aiSuggestMap[Number(key)])
   Object.keys(aiLoadingMap).forEach(key => delete aiLoadingMap[Number(key)])
@@ -321,6 +380,13 @@ async function fetchSubmissionDetail(submissionId: number) {
       if (answer.scoreGained !== null) {
         gradeMap.value[answer.questionId] = answer.scoreGained
       }
+      const savedSuggestion = buildSavedAiSuggestion(answer)
+      if (savedSuggestion) {
+        aiSuggestMap[answer.questionId] = savedSuggestion
+      }
+    }
+    if (shouldAutoSuggestForDetail(res.data)) {
+      void handleAiSuggestAll({ auto: true, submissionId: res.data.submissionId })
     }
   } catch {
     ElMessage.error('获取答卷详情失败')
@@ -332,22 +398,76 @@ async function fetchSubmissionDetail(submissionId: number) {
 async function handleAiSuggest(answer: AnswerItem) {
   aiLoadingMap[answer.questionId] = true
   try {
-    const res = await getAiGradeSuggest({
-      questionId: answer.questionId,
-      questionType: answer.type,
-      questionContent: answer.content,
-      standardAnswer: answer.standardAnswer,
-      studentAnswer: answer.studentAnswer || '',
-      maxScore: answer.questionScore,
-      scoringRubric: `请按本题满分 ${answer.questionScore} 分给出建议分。`
-    })
-    aiSuggestMap[answer.questionId] = res.data
-    gradeMap.value[answer.questionId] = clampScore(Number(res.data.suggestedScore), answer.questionScore)
+    await requestAiSuggest(answer, selectedSubmissionId.value)
     ElMessage.success('AI建议已生成，已填入建议分')
   } catch {
     ElMessage.error('AI辅助批改失败')
   } finally {
     aiLoadingMap[answer.questionId] = false
+  }
+}
+
+async function requestAiSuggest(answer: AnswerItem, submissionId: number | null) {
+  const res = await getAiGradeSuggest({
+    questionId: answer.questionId,
+    questionType: answer.type,
+    questionContent: answer.content,
+    standardAnswer: answer.standardAnswer,
+    studentAnswer: answer.studentAnswer || '',
+    maxScore: answer.questionScore,
+    scoringRubric: `请按本题满分 ${answer.questionScore} 分给出建议分。`
+  })
+  if (submissionId !== selectedSubmissionId.value) {
+    return false
+  }
+  aiSuggestMap[answer.questionId] = res.data
+  gradeMap.value[answer.questionId] = clampScore(Number(res.data.suggestedScore), answer.questionScore)
+  return true
+}
+
+async function handleAiSuggestAll(options: { auto?: boolean; submissionId?: number | null } = {}) {
+  const targetSubmissionId = options.submissionId ?? selectedSubmissionId.value
+  const answers = submissionDetail.value?.submissionId === targetSubmissionId
+    ? subjectiveAnswers.value
+    : []
+  if (answers.length === 0) {
+    ElMessage.warning('当前答卷没有主观题')
+    return
+  }
+  aiBatchLoading.value = true
+  let failed = 0
+  let applied = 0
+  try {
+    for (const answer of answers) {
+      if (targetSubmissionId !== selectedSubmissionId.value) {
+        return
+      }
+      aiLoadingMap[answer.questionId] = true
+      try {
+        const didApply = await requestAiSuggest(answer, targetSubmissionId)
+        if (didApply) {
+          applied += 1
+        }
+      } catch {
+        failed += 1
+      } finally {
+        aiLoadingMap[answer.questionId] = false
+      }
+    }
+    if (targetSubmissionId !== selectedSubmissionId.value) {
+      return
+    }
+    if (failed > 0) {
+      ElMessage.warning(`AI建议已生成，${failed} 道题失败`)
+    } else if (options.auto) {
+      ElMessage.success('AI建议已自动填入，可修改后提交批改')
+    } else {
+      ElMessage.success(`AI建议已全部生成，已填入 ${applied} 道题`)
+    }
+  } finally {
+    if (targetSubmissionId === selectedSubmissionId.value) {
+      aiBatchLoading.value = false
+    }
   }
 }
 
@@ -364,26 +484,98 @@ function clampScore(score: number, maxScore: number) {
   return Math.min(Math.max(Number(score.toFixed(1)), 0), maxScore)
 }
 
+function isSubjectiveAnswer(answer: AnswerItem) {
+  return answer.type === 'SHORT' || answer.type === 'CODE'
+}
+
+function shouldAutoSuggestForDetail(detail: SubmissionDetail) {
+  return detail.status === 'SUBMITTED' && detail.answers.some(isSubjectiveAnswer)
+}
+
+function findNextPendingSubmission(currentSubmissionId: number) {
+  if (submissions.value.length === 0) return null
+  const currentIndex = submissions.value.findIndex(item => item.submissionId === currentSubmissionId)
+  const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0
+  return submissions.value.slice(startIndex).find(item => item.status === 'SUBMITTED')
+    || submissions.value.slice(0, Math.max(startIndex, 0)).find(item => item.status === 'SUBMITTED')
+    || null
+}
+
+async function scrollToAnswerTop() {
+  await nextTick()
+  document.querySelector('.answer-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function formatPassRate(passRate: number) {
+  const normalizedRate = passRate > 0 && passRate <= 1 ? passRate * 100 : passRate
+  return `${normalizedRate.toFixed(0)}%`
+}
 
 async function handleSubmitGrade() {
-  if (!selectedSubmissionId.value) return
+  if (!selectedSubmissionId.value || !submissionDetail.value) return
+  const currentSubmissionId = selectedSubmissionId.value
+  const wasPendingSubmission = submissionDetail.value.status === 'SUBMITTED'
   
-  const grades = Object.entries(gradeMap.value).map(([questionId, scoreGained]) => ({
-    questionId: Number(questionId),
-    scoreGained
+  const grades = submissionDetail.value.answers.map(answer => ({
+    questionId: answer.questionId,
+    scoreGained: clampScore(
+      Number(gradeMap.value[answer.questionId] ?? answer.scoreGained ?? 0),
+      answer.questionScore
+    ),
+    aiSuggestScore: aiSuggestMap[answer.questionId]?.suggestedScore ?? answer.aiSuggestScore ?? null,
+    aiSuggestDetail: aiSuggestMap[answer.questionId]
+      ? JSON.stringify(aiSuggestMap[answer.questionId])
+      : answer.aiSuggestDetail ?? null
   }))
 
   submitting.value = true
   try {
-    await submitGrade(examId, selectedSubmissionId.value, grades)
-    ElMessage.success('批改完成')
+    await submitGrade(examId, currentSubmissionId, grades)
     await fetchSubmissions()
-    await fetchSubmissionDetail(selectedSubmissionId.value)
+    const nextPendingSubmission = wasPendingSubmission ? findNextPendingSubmission(currentSubmissionId) : null
+    if (nextPendingSubmission) {
+      activeSubmissionTab.value = 'pending'
+      await selectSubmission(nextPendingSubmission)
+      await scrollToAnswerTop()
+      ElMessage.success(`批改完成，已切换到 ${nextPendingSubmission.studentName}`)
+    } else {
+      await fetchSubmissionDetail(currentSubmissionId)
+      ElMessage.success(wasPendingSubmission ? '批改完成，已无待批改答卷' : '成绩修订已保存')
+    }
     await fetchStatistics()
   } catch {
     ElMessage.error('提交批改失败')
   } finally {
     submitting.value = false
+  }
+}
+
+function buildSavedAiSuggestion(answer: AnswerItem): AiGradeSuggest | null {
+  if (!answer.aiSuggestDetail && answer.aiSuggestScore == null) return null
+  if (answer.aiSuggestDetail) {
+    try {
+      const parsed = JSON.parse(answer.aiSuggestDetail) as AiGradeSuggest
+      return {
+        suggestedScore: Number(parsed.suggestedScore ?? answer.aiSuggestScore ?? 0),
+        maxScore: Number(parsed.maxScore ?? answer.questionScore),
+        reasoning: parsed.reasoning || parsed.suggestion || '',
+        suggestion: parsed.suggestion,
+        keyPoints: parsed.keyPoints || [],
+        matchedPoints: parsed.matchedPoints || [],
+        missingPoints: parsed.missingPoints || [],
+        confidence: parsed.confidence || 'MEDIUM'
+      }
+    } catch {
+    }
+  }
+  return {
+    suggestedScore: Number(answer.aiSuggestScore ?? 0),
+    maxScore: answer.questionScore,
+    reasoning: '',
+    keyPoints: [],
+    matchedPoints: [],
+    missingPoints: [],
+    confidence: 'MEDIUM'
   }
 }
 
@@ -393,8 +585,8 @@ async function handlePublish() {
     await publishScore(examId)
     ElMessage.success('成绩已发布')
     await fetchSubmissions()
-  } catch {
-    ElMessage.error('发布成绩失败')
+  } catch (error: any) {
+    ElMessage.error(error.message || '发布成绩失败')
   } finally {
     publishing.value = false
   }
@@ -402,6 +594,7 @@ async function handlePublish() {
 
 function getStatusText(status: string) {
   const map: Record<string, string> = {
+    UN: '答题中',
     SUBMITTED: '待批改',
     GRADED: '已批改',
     RETURNED: '已发放'
@@ -411,6 +604,7 @@ function getStatusText(status: string) {
 
 function getStatusType(status: string) {
   const map: Record<string, string> = {
+    UN: 'info',
     SUBMITTED: 'warning',
     GRADED: 'success',
     RETURNED: 'info'
@@ -450,10 +644,38 @@ function confidenceType(confidence?: string) {
 function parseOptions(optionsJson: string | null): string[] {
   if (!optionsJson) return []
   try {
-    return JSON.parse(optionsJson)
+    const parsed = JSON.parse(optionsJson)
+    if (Array.isArray(parsed)) {
+      return parsed.map((option) => {
+        if (typeof option === 'string') return option
+        if (option && typeof option === 'object') {
+          const record = option as Record<string, unknown>
+          return String(record.content ?? record.text ?? record.label ?? record.value ?? '')
+        }
+        return String(option ?? '')
+      }).filter(Boolean)
+    }
+    if (parsed && typeof parsed === 'object') {
+      return Object.entries(parsed as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([, value]) => {
+          if (typeof value === 'string') return value
+          if (value && typeof value === 'object') {
+            const record = value as Record<string, unknown>
+            return String(record.content ?? record.text ?? record.label ?? record.value ?? '')
+          }
+          return String(value ?? '')
+        })
+        .filter(Boolean)
+    }
+    return []
   } catch {
     return []
   }
+}
+
+function formatOptions(optionsJson: string | null) {
+  return parseOptions(optionsJson).map((option, index) => `${String.fromCharCode(65 + index)}. ${option}`)
 }
 
 function formatAnswer(answer: string | null, type: string, optionsJson: string | null): string {
@@ -461,10 +683,13 @@ function formatAnswer(answer: string | null, type: string, optionsJson: string |
   if (type === 'SINGLE' || type === 'MULTIPLE' || type === 'JUDGE') {
     const options = parseOptions(optionsJson)
     if (type === 'JUDGE') {
-      return answer === 'T' ? '正确' : '错误'
+      const normalized = answer.trim().toLowerCase()
+      if (['t', 'true', '1', '正确', '对', '是'].includes(normalized)) return '正确'
+      if (['f', 'false', '0', '错误', '错', '否'].includes(normalized)) return '错误'
+      return answer
     }
     if (options.length > 0) {
-      const letters = answer.split(',').map(a => a.trim().toUpperCase())
+      const letters = answer.split(/[,，、\s]+/).map(a => a.trim().toUpperCase()).filter(Boolean)
       return letters.map(l => {
         const idx = l.charCodeAt(0) - 65
         return idx >= 0 && idx < options.length ? `${l}. ${options[idx]}` : l
@@ -488,15 +713,15 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: #030303;
+  background: var(--bg-surface);
   min-height: 100vh;
   padding: 16px;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .header-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
 }
@@ -504,7 +729,7 @@ onMounted(() => {
 .header-card :deep(.el-card__header) {
   padding: 12px 20px;
   background: transparent !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .header-card :deep(.el-card__body) {
@@ -563,8 +788,8 @@ onMounted(() => {
 .stat-item {
   text-align: center;
   padding: 12px 8px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
 
@@ -578,15 +803,15 @@ onMounted(() => {
 
 .stat-label {
   font-size: 12px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   margin-top: 4px;
   font-family: 'JetBrains Mono', monospace;
   opacity: 0.8;
 }
 
 .student-list-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
   box-shadow: 0 0 15px rgba(0, 255, 255, 0.08) !important;
   max-height: calc(100vh - 220px);
@@ -596,7 +821,7 @@ onMounted(() => {
 .student-list-card :deep(.el-card__header) {
   padding: 12px 16px;
   background: transparent !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #ff10f0 !important;
   font-family: 'JetBrains Mono', monospace;
   font-weight: 600;
@@ -604,7 +829,33 @@ onMounted(() => {
 
 .student-list-card :deep(.el-card__body) {
   background: transparent !important;
-  padding: 0 !important;
+  padding: 0 0 8px !important;
+}
+
+.grade-tabs {
+  padding: 0 12px;
+}
+
+.grade-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.grade-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--bg-surface);
+}
+
+.grade-tabs :deep(.el-tabs__item) {
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.grade-tabs :deep(.el-tabs__item.is-active) {
+  color: #00ffff;
+}
+
+.grade-tabs :deep(.el-tabs__active-bar) {
+  background: #00ffff;
 }
 
 .student-list-card :deep(.el-loading-mask) {
@@ -613,7 +864,7 @@ onMounted(() => {
 
 .student-item {
   padding: 12px 16px;
-  border-bottom: 1px solid #1a1a2e;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.3s;
   background: transparent;
@@ -632,7 +883,7 @@ onMounted(() => {
 .student-name {
   font-weight: 500;
   margin-bottom: 6px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -641,7 +892,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .student-info :deep(.el-tag) {
@@ -663,8 +914,8 @@ onMounted(() => {
 
 .student-info :deep(.el-tag--info) {
   background: transparent !important;
-  border-color: #e0e0e0 !important;
-  color: #e0e0e0 !important;
+  border-color: var(--text-primary) !important;
+  color: var(--text-primary) !important;
 }
 
 .score {
@@ -678,8 +929,8 @@ onMounted(() => {
 }
 
 .answer-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
   box-shadow: 0 0 15px rgba(255, 16, 240, 0.08) !important;
   max-height: calc(100vh - 220px);
@@ -689,7 +940,7 @@ onMounted(() => {
 .answer-card :deep(.el-card__header) {
   padding: 12px 16px;
   background: transparent !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace;
   font-weight: 600;
@@ -706,16 +957,27 @@ onMounted(() => {
 
 .empty-tip {
   text-align: center;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   padding: 40px 0;
   font-family: 'JetBrains Mono', monospace;
   opacity: 0.6;
 }
 
+.empty-tip.compact {
+  padding: 24px 0;
+}
+
+.answer-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .question-card {
   margin-bottom: 16px;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.05) !important;
 }
@@ -723,7 +985,7 @@ onMounted(() => {
 .question-card :deep(.el-card__header) {
   padding: 10px 14px;
   background: rgba(26, 26, 46, 0.5) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .question-card :deep(.el-card__body) {
@@ -768,8 +1030,22 @@ onMounted(() => {
   font-size: 15px;
   line-height: 1.6;
   margin-bottom: 16px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
+}
+
+.option-list {
+  display: grid;
+  gap: 6px;
+}
+
+.option-item {
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .answer-section {
@@ -789,7 +1065,7 @@ onMounted(() => {
   border-radius: 0;
   background: rgba(26, 26, 46, 0.5);
   line-height: 1.6;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
   border-left: 3px solid;
 }
@@ -797,6 +1073,12 @@ onMounted(() => {
 .student-answer {
   border-left-color: #00ffff !important;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.student-answer.empty {
+  color: var(--text-secondary) !important;
+  border-left-color: var(--text-secondary) !important;
+  background: rgba(144, 144, 144, 0.06);
 }
 
 .standard-answer {
@@ -816,7 +1098,7 @@ onMounted(() => {
 
 .answer-section :deep(.el-collapse-item__header) {
   background: transparent !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   color: #00ffff !important;
   font-family: 'JetBrains Mono', monospace;
   height: 36px;
@@ -831,7 +1113,7 @@ onMounted(() => {
 .answer-section :deep(.el-collapse-item__content) {
   background: transparent !important;
   padding: 10px 0 !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .result-tags {
@@ -878,16 +1160,16 @@ onMounted(() => {
 }
 
 .grading-controls :deep(.el-input-number) {
-  --el-input-bg-color: #0a0a0a;
-  --el-input-border-color: #1a1a2e;
+  --el-input-bg-color: var(--bg-surface);
+  --el-input-border-color: var(--border-subtle);
   --el-input-text-color: #00ffff;
   --el-input-hover-border-color: #00ffff;
   --el-input-focus-border-color: #00ffff;
 }
 
 .grading-controls :deep(.el-input-number .el-input__wrapper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.1) !important;
 }
 
@@ -899,8 +1181,8 @@ onMounted(() => {
 
 .grading-controls :deep(.el-input-number__decrease),
 .grading-controls :deep(.el-input-number__increase) {
-  background: #0a0a0a !important;
-  border-color: #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
   color: #00ffff !important;
 }
 
@@ -910,7 +1192,7 @@ onMounted(() => {
 }
 
 .score-max {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
   opacity: 0.7;
 }
@@ -937,7 +1219,7 @@ onMounted(() => {
 }
 
 .ai-reason {
-  color: #e0e0e0;
+  color: var(--text-primary);
   line-height: 1.7;
   white-space: pre-wrap;
   margin-bottom: 10px;
@@ -961,6 +1243,10 @@ onMounted(() => {
 .submit-grade-btn {
   text-align: center;
   padding: 20px 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .submit-grade-btn :deep(.el-button--primary) {
@@ -985,11 +1271,11 @@ onMounted(() => {
 }
 
 ::-webkit-scrollbar-track {
-  background: #030303;
+  background: var(--bg-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a2e;
+  background: var(--bg-surface);
   border-radius: 3px;
 }
 

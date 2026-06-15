@@ -9,7 +9,9 @@ import java.util.List;
 public class StudentDashboardVO {
     
     private List<TaskVO> upcomingTasks;
+    private List<TaskVO> todoTasks;
     private List<TaskVO> pendingTasks;
+    private List<TaskVO> submittedTasks;
     private List<TaskVO> completedTasks;
     
     @Data

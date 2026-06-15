@@ -28,7 +28,7 @@
         </el-table-column>
         <el-table-column label="得分" width="100" align="center">
           <template #default="{ row }">
-            <span v-if="row.scoreGained !== null" class="score-value">{{ row.scoreGained }}</span>
+            <span v-if="row.status === 'GRADED' && row.scoreGained !== null" class="score-value">{{ row.scoreGained }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -55,7 +55,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { getStudentExamRecords, type ExamRecordItem } from '@/api/exam'
 
 const router = useRouter()
@@ -138,7 +138,7 @@ onMounted(() => {
 }
 
 .pending-text {
-  color: #FFFF00;
+  color: var(--text-primary)F00;
   font-size: 11px;
   letter-spacing: 1px;
   text-transform: uppercase;

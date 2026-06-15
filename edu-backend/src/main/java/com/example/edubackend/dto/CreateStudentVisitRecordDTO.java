@@ -23,6 +23,17 @@ public class CreateStudentVisitRecordDTO {
     @Size(max = 1000, message = "回访内容不能超过1000字")
     private String content;
 
+    @Size(max = 50, message = "问题分类不能超过50字")
+    private String problemCategory;
+
+    @Size(max = 500, message = "沟通结论不能超过500字")
+    private String conclusion;
+
+    @Size(max = 500, message = "附件链接不能超过500字")
+    private String attachmentUrl;
+
+    private Boolean resolved;
+
     private LocalDateTime nextFollowTime;
 
     private LocalDateTime visitTime;

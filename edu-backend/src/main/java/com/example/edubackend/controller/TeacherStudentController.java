@@ -10,6 +10,7 @@ import com.example.edubackend.dto.ImportUserDTO;
 import com.example.edubackend.dto.PasswordResetRespDTO;
 import com.example.edubackend.dto.StudentClassHistoryVO;
 import com.example.edubackend.dto.StudentInfoVO;
+import com.example.edubackend.dto.UpdateStudentDTO;
 import com.example.edubackend.entity.ClassStudentRel;
 import com.example.edubackend.entity.SysClass;
 import com.example.edubackend.entity.SysUser;
@@ -21,7 +22,6 @@ import com.example.edubackend.mapper.TeacherClassRelMapper;
 import com.example.edubackend.mapper.ClassStudentRelMapper;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.AuthTokenService;
-import com.example.edubackend.util.SecurePasswordGenerator;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +44,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/teacher")
 @RequiredArgsConstructor
 public class TeacherStudentController {
+    private static final String DEFAULT_INITIAL_PASSWORD = "openlab@123";
+    private static final String PHONE_PATTERN = "^1\\d{10}$";
 
     private final SysUserMapper sysUserMapper;
     private final TeacherClassRelMapper teacherClassRelMapper;
@@ -70,6 +72,7 @@ public class TeacherStudentController {
 
         SysUser existing = findExistingStudent(dto.getPhone(), dto.getUsername());
         if (existing != null) {
+            ensureExistingStudentMatches(existing, dto.getRealName());
             ensureStudentInClass(existing, dto.getClassId(), "ASSISTANT_ADD", UserContext.getUserId());
             existing.setPassword(null);
             CreateUserRespDTO resp = new CreateUserRespDTO();
@@ -106,7 +109,7 @@ public class TeacherStudentController {
             throw new BusinessException(400, "手机号已存在");
         }
 
-        String initialPassword = "openlab23";
+        String initialPassword = DEFAULT_INITIAL_PASSWORD;
 
         SysUser user = new SysUser();
         user.setUsername(username);
@@ -162,23 +165,33 @@ public class TeacherStudentController {
             int rowNum = i + 2;
             
             try {
-                if (!"STUDENT".equals(dto.getRole()) && dto.getRole() != null) {
+                if (!isImportRowPresent(dto)) {
+                    continue;
+                }
+                if (!"STUDENT".equals(dto.getRole()) && StringUtils.hasText(dto.getRole())) {
                     errors.add("第" + rowNum + "行: 角色必须是STUDENT");
                     continue;
                 }
 
-                String username = dto.getUsername();
-                if (!StringUtils.hasText(username) && StringUtils.hasText(dto.getPhone())) {
-                    String phone = dto.getPhone().trim();
-                    if (phone.length() >= 6) {
-                        username = "op" + phone.substring(phone.length() - 6);
-                    } else {
-                        username = "op" + phone;
-                    }
+                String phone = textOrNull(dto.getPhone());
+                String realName = textOrNull(dto.getRealName());
+                if (!StringUtils.hasText(phone)) {
+                    errors.add("第" + rowNum + "行: 手机号不能为空，且手机号必须作为登录账号");
+                    continue;
                 }
+                if (!phone.matches(PHONE_PATTERN)) {
+                    errors.add("第" + rowNum + "行: 手机号格式不正确，必须为11位手机号");
+                    continue;
+                }
+                if (!StringUtils.hasText(realName)) {
+                    errors.add("第" + rowNum + "行: 真实姓名不能为空");
+                    continue;
+                }
+                String username = phone;
 
-                SysUser existing = findExistingStudent(dto.getPhone(), username);
+                SysUser existing = findExistingStudent(phone, username);
                 if (existing != null) {
+                    ensureExistingStudentMatches(existing, realName);
                     if (isStudentInClass(existing.getId(), classId)) {
                         skipped++;
                     } else {
@@ -189,33 +202,27 @@ public class TeacherStudentController {
                     continue;
                 }
 
-                if (!StringUtils.hasText(username)) {
-                    errors.add("第" + rowNum + "行: 用户名或手机号至少填写一个");
-                    continue;
-                }
-
-                username = username.trim();
                 if (sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
                         .eq(SysUser::getUsername, username)
                         .eq(SysUser::getIsDeleted, (byte) 0)) > 0) {
                     errors.add("第" + rowNum + "行: 用户名" + username + "已存在");
                     continue;
                 }
-                if (StringUtils.hasText(dto.getPhone()) && sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
-                        .eq(SysUser::getPhone, dto.getPhone().trim())
+                if (sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getPhone, phone)
                         .eq(SysUser::getIsDeleted, (byte) 0)) > 0) {
-                    errors.add("第" + rowNum + "行: 手机号" + dto.getPhone() + "已存在");
+                    errors.add("第" + rowNum + "行: 手机号" + phone + "已存在");
                     continue;
                 }
 
-                String initialPassword = "openlab23";
+                String initialPassword = DEFAULT_INITIAL_PASSWORD;
 
                 SysUser user = new SysUser();
                 user.setUsername(username);
                 user.setPassword(passwordEncoder.encode(initialPassword));
-                user.setRealName(dto.getRealName() != null ? dto.getRealName() : username);
+                user.setRealName(realName);
                 user.setRole("STUDENT");
-                user.setPhone(textOrNull(dto.getPhone()));
+                user.setPhone(phone);
                 user.setSchoolName(textOrNull(dto.getSchoolName()));
                 user.setCreateSource("ASSISTANT_IMPORT");
                 user.setClassId(classId);
@@ -250,6 +257,15 @@ public class TeacherStudentController {
         ));
     }
 
+    private boolean isImportRowPresent(ImportUserDTO dto) {
+        return dto != null && (StringUtils.hasText(dto.getUsername())
+                || StringUtils.hasText(dto.getRealName())
+                || StringUtils.hasText(dto.getPhone())
+                || StringUtils.hasText(dto.getSchoolName())
+                || StringUtils.hasText(dto.getRole())
+                || dto.getClassId() != null);
+    }
+
     private Set<Long> getAllowedClassIds() {
         Long userId = UserContext.getUserId();
         String userRole = UserContext.getUser().getRole();
@@ -271,8 +287,37 @@ public class TeacherStudentController {
                 .collect(Collectors.toSet());
     }
 
-    private String generateInitialPassword(String username) {
-        return SecurePasswordGenerator.generate();
+    @GetMapping("/students/search-existing")
+    @RequireRole({"ADMIN", "TEACHER", "ASSISTANT"})
+    public Result<List<StudentInfoVO>> searchExistingStudents(@RequestParam Long targetClassId,
+                                                              @RequestParam String keyword,
+                                                              @RequestParam(defaultValue = "20") Integer limit) {
+        Set<Long> allowedClassIds = getAllowedClassIds();
+        if (!allowedClassIds.contains(targetClassId)) {
+            throw new BusinessException(403, "无权在此班级添加学生");
+        }
+
+        String searchKeyword = textOrNull(keyword);
+        if (!StringUtils.hasText(searchKeyword)) {
+            return Result.success(List.of());
+        }
+
+        int safeLimit = limit == null ? 20 : Math.max(1, Math.min(limit, 50));
+        LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getRole, "STUDENT")
+                .eq(SysUser::getIsDeleted, (byte) 0)
+                .and(w -> w.like(SysUser::getUsername, searchKeyword)
+                        .or()
+                        .like(SysUser::getRealName, searchKeyword)
+                        .or()
+                        .like(SysUser::getPhone, searchKeyword)
+                        .or()
+                        .like(SysUser::getSchoolName, searchKeyword))
+                .orderByDesc(SysUser::getCreateTime)
+                .last("LIMIT " + safeLimit);
+
+        List<SysUser> students = sysUserMapper.selectList(wrapper);
+        return Result.success(students.stream().map(this::toStudentInfoVO).toList());
     }
 
     @PutMapping("/student/{id}/reset-password")
@@ -288,7 +333,7 @@ public class TeacherStudentController {
             throw new BusinessException(403, "无权重置该学生密码");
         }
 
-        String newPassword = "openlab123";
+        String newPassword = DEFAULT_INITIAL_PASSWORD;
         student.setPassword(passwordEncoder.encode(newPassword));
         student.setMustChangePassword((byte) 1);
         sysUserMapper.updateById(student);
@@ -300,13 +345,102 @@ public class TeacherStudentController {
         resp.setUserId(student.getId());
         resp.setUsername(student.getUsername());
         resp.setNewPassword(newPassword);
-        resp.setMessage("密码已重置为 openlab123");
+        resp.setMessage("密码已重置为 " + DEFAULT_INITIAL_PASSWORD);
         return Result.success(resp);
+    }
+
+    @PutMapping("/student/{id}")
+    @RequireRole({"ADMIN", "TEACHER", "ASSISTANT"})
+    public Result<StudentInfoVO> updateStudent(@PathVariable Long id, @Valid @RequestBody UpdateStudentDTO dto) {
+        SysUser student = sysUserMapper.selectById(id);
+        if (student == null || !"STUDENT".equals(student.getRole())) {
+            throw new BusinessException(404, "学生不存在");
+        }
+        ensureCanManageStudent(student);
+
+        String username = dto.getUsername().trim();
+        String realName = dto.getRealName().trim();
+        String phone = textOrNull(dto.getPhone());
+
+        if (StringUtils.hasText(phone) && !phone.matches(PHONE_PATTERN)) {
+            throw new BusinessException(400, "手机号格式不正确，必须为11位手机号");
+        }
+        if (sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getUsername, username)
+                .eq(SysUser::getIsDeleted, (byte) 0)
+                .ne(SysUser::getId, id)) > 0) {
+            throw new BusinessException(400, "用户名已存在");
+        }
+        if (StringUtils.hasText(phone) && sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getPhone, phone)
+                .eq(SysUser::getIsDeleted, (byte) 0)
+                .ne(SysUser::getId, id)) > 0) {
+            throw new BusinessException(400, "手机号已存在");
+        }
+
+        boolean usernameChanged = !username.equals(student.getUsername());
+        student.setUsername(username);
+        student.setRealName(realName);
+        student.setPhone(phone);
+        student.setSchoolName(textOrNull(dto.getSchoolName()));
+        sysUserMapper.updateById(student);
+        if (usernameChanged) {
+            authTokenService.invalidateUserToken(student.getId());
+        }
+
+        log.info("{}修改学生资料: {}", UserContext.getUserId(), username);
+        return Result.success(toStudentInfoVO(student));
+    }
+
+    @DeleteMapping("/student/{id}/class/{classId}")
+    @RequireRole({"ADMIN", "TEACHER", "ASSISTANT"})
+    public Result<Void> removeStudentFromClass(@PathVariable Long id, @PathVariable Long classId) {
+        SysUser student = sysUserMapper.selectById(id);
+        if (student == null || !"STUDENT".equals(student.getRole())) {
+            throw new BusinessException(404, "学生不存在");
+        }
+        Set<Long> allowedClassIds = getAllowedClassIds();
+        if (!allowedClassIds.contains(classId)) {
+            throw new BusinessException(403, "无权操作该班级");
+        }
+
+        List<ClassStudentRel> activeRels = classStudentRelMapper.selectList(new LambdaQueryWrapper<ClassStudentRel>()
+                .eq(ClassStudentRel::getStudentId, id)
+                .eq(ClassStudentRel::getClassId, classId)
+                .eq(ClassStudentRel::getStatus, "ACTIVE"));
+        if (activeRels.isEmpty() && (student.getClassId() == null || !student.getClassId().equals(classId))) {
+            throw new BusinessException(404, "该学生不在当前班级");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (ClassStudentRel rel : activeRels) {
+            rel.setStatus("LEFT");
+            rel.setLeaveTime(now);
+            classStudentRelMapper.updateById(rel);
+        }
+        if (student.getClassId() != null && student.getClassId().equals(classId)) {
+            Long nextClassId = classStudentRelMapper.selectList(new LambdaQueryWrapper<ClassStudentRel>()
+                            .eq(ClassStudentRel::getStudentId, id)
+                            .eq(ClassStudentRel::getStatus, "ACTIVE")
+                            .ne(ClassStudentRel::getClassId, classId)
+                            .orderByDesc(ClassStudentRel::getJoinTime))
+                    .stream()
+                    .map(ClassStudentRel::getClassId)
+                    .filter(nextId -> nextId != null)
+                    .findFirst()
+                    .orElse(null);
+            student.setClassId(nextClassId);
+            sysUserMapper.updateById(student);
+        }
+
+        log.info("{}将学生移出班级: student={}, class={}", UserContext.getUserId(), student.getUsername(), classId);
+        return Result.success();
     }
 
     @GetMapping("/students")
     @RequireRole({"ADMIN", "TEACHER", "ASSISTANT"})
-    public Result<List<StudentInfoVO>> getStudents(@RequestParam(required = false) Long classId) {
+    public Result<List<StudentInfoVO>> getStudents(@RequestParam(required = false) Long classId,
+                                                   @RequestParam(required = false) String keyword) {
         String role = UserContext.getUser().getRole();
         Long userId = UserContext.getUserId();
 
@@ -325,32 +459,31 @@ public class TeacherStudentController {
                 if (!myClassIds.contains(classId)) {
                     throw new BusinessException(403, "无权查看该班级学员");
                 }
-                List<Long> relStudentIds = getStudentIdsByClass(classId);
-                studentWrapper.and(w -> {
-                    w.eq(SysUser::getClassId, classId);
-                    if (!relStudentIds.isEmpty()) {
-                        w.or().in(SysUser::getId, relStudentIds);
-                    }
-                });
+                List<Long> studentIds = getVisibleStudentIdsByClass(classId);
+                if (studentIds.isEmpty()) return Result.success(List.of());
+                studentWrapper.in(SysUser::getId, studentIds);
             } else {
                 if (myClassIds.isEmpty()) return Result.success(List.of());
-                List<Long> relStudentIds = getStudentIdsByClasses(myClassIds);
-                studentWrapper.and(w -> {
-                    w.in(SysUser::getClassId, myClassIds);
-                    if (!relStudentIds.isEmpty()) {
-                        w.or().in(SysUser::getId, relStudentIds);
-                    }
-                });
+                List<Long> studentIds = getVisibleStudentIdsByClasses(myClassIds);
+                if (studentIds.isEmpty()) return Result.success(List.of());
+                studentWrapper.in(SysUser::getId, studentIds);
             }
         } else if (classId != null) {
             // ADMIN 或 ASSISTANT 指定了班级
-            List<Long> relStudentIds = getStudentIdsByClass(classId);
-            studentWrapper.and(w -> {
-                w.eq(SysUser::getClassId, classId);
-                if (!relStudentIds.isEmpty()) {
-                    w.or().in(SysUser::getId, relStudentIds);
-                }
-            });
+            List<Long> studentIds = getVisibleStudentIdsByClass(classId);
+            if (studentIds.isEmpty()) return Result.success(List.of());
+            studentWrapper.in(SysUser::getId, studentIds);
+        }
+
+        if (StringUtils.hasText(keyword)) {
+            String searchKeyword = keyword.trim();
+            studentWrapper.and(w -> w.like(SysUser::getUsername, searchKeyword)
+                    .or()
+                    .like(SysUser::getRealName, searchKeyword)
+                    .or()
+                    .like(SysUser::getPhone, searchKeyword)
+                    .or()
+                    .like(SysUser::getSchoolName, searchKeyword));
         }
 
         List<SysUser> students = sysUserMapper.selectList(studentWrapper.orderByDesc(SysUser::getCreateTime));
@@ -398,12 +531,41 @@ public class TeacherStudentController {
         return Result.success(result);
     }
 
+    private StudentInfoVO toStudentInfoVO(SysUser s) {
+        StudentInfoVO vo = new StudentInfoVO();
+        vo.setId(s.getId());
+        vo.setUsername(s.getUsername());
+        vo.setRealName(s.getRealName());
+        vo.setPhone(s.getPhone());
+        vo.setSchoolName(s.getSchoolName());
+        vo.setRole(s.getRole());
+        vo.setClassId(s.getClassId());
+        vo.setCreateTime(s.getCreateTime());
+        if (s.getClassId() != null) {
+            SysClass c = sysClassMapper.selectById(s.getClassId());
+            if (c != null) vo.setClassName(c.getClassName());
+        }
+        return vo;
+    }
+
+    private void ensureCanManageStudent(SysUser student) {
+        String role = UserContext.getUser().getRole();
+        if ("ADMIN".equals(role)) {
+            return;
+        }
+        Set<Long> allowedClassIds = getAllowedClassIds();
+        if (!studentInAnyAllowedClass(student.getId(), allowedClassIds)) {
+            throw new BusinessException(403, "无权操作该学生");
+        }
+    }
+
     private List<Long> getStudentIdsByClass(Long classId) {
         if (classId == null) {
             return List.of();
         }
         return classStudentRelMapper.selectList(new LambdaQueryWrapper<ClassStudentRel>()
-                .eq(ClassStudentRel::getClassId, classId))
+                .eq(ClassStudentRel::getClassId, classId)
+                .eq(ClassStudentRel::getStatus, "ACTIVE"))
                 .stream()
                 .map(ClassStudentRel::getStudentId)
                 .filter(id -> id != null)
@@ -422,7 +584,8 @@ public class TeacherStudentController {
             return List.of();
         }
         return classStudentRelMapper.selectList(new LambdaQueryWrapper<ClassStudentRel>()
-                .in(ClassStudentRel::getClassId, safeClassIds))
+                .in(ClassStudentRel::getClassId, safeClassIds)
+                .eq(ClassStudentRel::getStatus, "ACTIVE"))
                 .stream()
                 .map(ClassStudentRel::getStudentId)
                 .filter(id -> id != null)
@@ -430,11 +593,57 @@ public class TeacherStudentController {
                 .toList();
     }
 
+    private List<Long> getVisibleStudentIdsByClass(Long classId) {
+        if (classId == null) {
+            return List.of();
+        }
+        return getVisibleStudentIdsByClasses(Set.of(classId));
+    }
+
+    private List<Long> getVisibleStudentIdsByClasses(Set<Long> classIds) {
+        if (classIds == null || classIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> safeClassIds = classIds.stream()
+                .filter(id -> id != null)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (safeClassIds.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> visibleIds = new LinkedHashSet<>(getStudentIdsByClasses(safeClassIds));
+
+        List<SysUser> legacyClassStudents = sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getRole, "STUDENT")
+                .eq(SysUser::getIsDeleted, (byte) 0)
+                .in(SysUser::getClassId, safeClassIds));
+        List<Long> legacyCandidateIds = legacyClassStudents.stream()
+                .map(SysUser::getId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (!legacyCandidateIds.isEmpty()) {
+            Set<Long> studentsWithAnyClassRel = classStudentRelMapper.selectList(new LambdaQueryWrapper<ClassStudentRel>()
+                            .in(ClassStudentRel::getStudentId, legacyCandidateIds))
+                    .stream()
+                    .map(ClassStudentRel::getStudentId)
+                    .filter(id -> id != null)
+                    .collect(Collectors.toSet());
+            for (Long candidateId : legacyCandidateIds) {
+                if (!studentsWithAnyClassRel.contains(candidateId)) {
+                    visibleIds.add(candidateId);
+                }
+            }
+        }
+
+        return new ArrayList<>(visibleIds);
+    }
+
     private SysUser findExistingStudent(String phone, String username) {
         if (!StringUtils.hasText(phone) && !StringUtils.hasText(username)) {
             return null;
         }
-        LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
+        List<SysUser> matches = sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getRole, "STUDENT")
                 .eq(SysUser::getIsDeleted, (byte) 0)
                 .and(w -> {
@@ -449,15 +658,49 @@ public class TeacherStudentController {
                     if (hasUsername) {
                         w.eq(SysUser::getUsername, username.trim());
                     }
-                })
-                .last("LIMIT 1");
-        return sysUserMapper.selectOne(wrapper);
+                }));
+        if (matches.isEmpty()) {
+            return null;
+        }
+        if (matches.size() > 1) {
+            throw new BusinessException(400, "手机号和用户名匹配到不同学生账号，请核对后再添加");
+        }
+        return matches.get(0);
+    }
+
+    private void ensureExistingStudentMatches(SysUser existing, String realName) {
+        String inputName = textOrNull(realName);
+        String existingName = textOrNull(existing.getRealName());
+        if (StringUtils.hasText(inputName) && StringUtils.hasText(existingName)
+                && !inputName.equals(existingName)) {
+            throw new BusinessException(400, "手机号或用户名已存在，但姓名不一致：已有账号姓名为"
+                    + existingName + "，请核对后再添加");
+        }
     }
 
     private void ensureStudentInClass(SysUser student, Long classId, String source, Long operatorId) {
         if (isStudentInClass(student.getId(), classId)) {
             return;
         }
+
+        ClassStudentRel existingRel = classStudentRelMapper.selectOne(new LambdaQueryWrapper<ClassStudentRel>()
+                .eq(ClassStudentRel::getStudentId, student.getId())
+                .eq(ClassStudentRel::getClassId, classId)
+                .last("LIMIT 1"));
+        if (existingRel != null) {
+            existingRel.setStatus("ACTIVE");
+            existingRel.setJoinSource(source);
+            existingRel.setCreatedBy(operatorId);
+            existingRel.setJoinTime(LocalDateTime.now());
+            existingRel.setLeaveTime(null);
+            classStudentRelMapper.updateById(existingRel);
+            if (student.getClassId() == null) {
+                student.setClassId(classId);
+                sysUserMapper.updateById(student);
+            }
+            return;
+        }
+
         ClassStudentRel rel = new ClassStudentRel();
         rel.setClassId(classId);
         rel.setStudentId(student.getId());

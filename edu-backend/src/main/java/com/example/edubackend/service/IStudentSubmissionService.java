@@ -24,5 +24,7 @@ public interface IStudentSubmissionService extends IService<StudentSubmission> {
 
     List<ScoreExportDTO> getExportData(Long examId);
 
+    List<ExamAnswerDetailExportRow> getAnswerExportData(Long examId);
+
     ExamParticipationVO getExamParticipation(Long examId);
 }

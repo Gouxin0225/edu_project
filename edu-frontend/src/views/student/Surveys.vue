@@ -70,7 +70,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { getStudentSurveyList, type StudentSurveyItem } from '@/api/survey'
 
 const router = useRouter()
@@ -118,23 +118,23 @@ onMounted(() => {
 <style scoped>
 .page {
   padding: 0;
-  background: var(--bg-base, #030303);
+  background: var(--bg-base);
   min-height: 100vh;
 }
 
 .survey-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 :deep(.el-card__header) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .card-header {
@@ -157,29 +157,29 @@ onMounted(() => {
 
 :deep(.el-table) {
   background: transparent !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-table__header-wrapper th) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   color: #00ffff !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   font-family: 'JetBrains Mono', monospace;
   text-shadow: 0 0 5px rgba(0, 255, 255, 0.3);
 }
 
 :deep(.el-table__body-wrapper tr) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 :deep(.el-table__body-wrapper td) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.el-table__body-wrapper tr:hover > td) {
-  background: #1a1a2e !important;
+  background: var(--bg-surface) !important;
 }
 
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
@@ -241,7 +241,7 @@ onMounted(() => {
 }
 
 .disabled-btn {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -250,7 +250,7 @@ onMounted(() => {
 }
 
 :deep(.el-empty__description) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
 }
 
 :deep(.el-empty__image svg) {
@@ -267,6 +267,6 @@ onMounted(() => {
 }
 
 :deep(.el-table__empty-text) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
 }
 </style>

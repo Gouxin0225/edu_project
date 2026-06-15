@@ -13,7 +13,6 @@ import com.example.edubackend.mapper.SurveyRecordMapper;
 import com.example.edubackend.mapper.SurveyTaskMapper;
 import com.example.edubackend.mapper.SysUserMapper;
 import com.example.edubackend.mapper.TeacherClassRelMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +39,7 @@ class SurveyServiceImplTest {
     }
 
     @Test
-    void createSurveyWritesDefaultScaleOptionsAsJsonArray() throws Exception {
+    void createSurveyWithoutClientQuestionsWritesFixedQuestions() {
         SurveyTaskMapper surveyTaskMapper = mock(SurveyTaskMapper.class);
         SurveyQuestionMapper surveyQuestionMapper = mock(SurveyQuestionMapper.class);
         SysUserMapper sysUserMapper = mock(SysUserMapper.class);
@@ -55,20 +54,48 @@ class SurveyServiceImplTest {
         CreateSurveyDTO dto = new CreateSurveyDTO();
         dto.setTitle("满意度问卷");
         dto.setEndTime(LocalDateTime.now().plusDays(1));
-        CreateSurveyDTO.QuestionConfig question = new CreateSurveyDTO.QuestionConfig();
-        question.setType("SCALE");
-        question.setTitle("课程体验");
-        question.setOptionsJson(" ");
-        dto.setQuestions(List.of(question));
 
         service.createSurvey(dto, 1L);
 
         ArgumentCaptor<SurveyQuestion> captor = ArgumentCaptor.forClass(SurveyQuestion.class);
-        verify(surveyQuestionMapper).insert(captor.capture());
-        List<String> options = objectMapper.readValue(
-                captor.getValue().getOptionsJson(),
-                new TypeReference<>() {});
-        assertThat(options).containsExactly("非常不同意", "不同意", "一般", "同意", "非常同意");
+        verify(surveyQuestionMapper, org.mockito.Mockito.times(6)).insert(captor.capture());
+        List<SurveyQuestion> questions = captor.getAllValues();
+
+        assertThat(questions).extracting(SurveyQuestion::getTitle).containsExactly(
+                "您对这次授课讲师打几分？满分5分",
+                "您对讲师授课的逻辑性打几分？满分5分",
+                "您对讲师上课的趣味性打几分？满分5分",
+                "讲师对学员关系度打几分？满分5分",
+                "讲师理论与工程结合能力您打几分？满分5分",
+                "您对授课讲师的建议"
+        );
+        assertThat(questions.subList(0, 5)).allSatisfy(fixedQuestion -> {
+            assertThat(fixedQuestion.getType()).isEqualTo("STAR");
+            assertThat(fixedQuestion.getOptionsJson()).isEqualTo("[1,2,3,4,5]");
+            assertThat(fixedQuestion.getIsRequired()).isEqualTo((byte) 1);
+        });
+        assertThat(questions.get(5).getType()).isEqualTo("TEXT");
+        assertThat(questions.get(5).getOptionsJson()).isEqualTo("[]");
+    }
+
+    @Test
+    void createSurveyRejectsCustomQuestions() {
+        SurveyTaskMapper surveyTaskMapper = mock(SurveyTaskMapper.class);
+        SurveyQuestionMapper surveyQuestionMapper = mock(SurveyQuestionMapper.class);
+        SysUserMapper sysUserMapper = mock(SysUserMapper.class);
+        SurveyServiceImpl service = newService(surveyTaskMapper, surveyQuestionMapper, sysUserMapper);
+
+        CreateSurveyDTO dto = new CreateSurveyDTO();
+        dto.setTitle("自定义问卷");
+        dto.setEndTime(LocalDateTime.now().plusDays(1));
+        CreateSurveyDTO.QuestionConfig question = new CreateSurveyDTO.QuestionConfig();
+        question.setType("TEXT");
+        question.setTitle("客户端传入的自定义题目");
+        dto.setQuestions(List.of(question));
+
+        assertThatThrownBy(() -> service.createSurvey(dto, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("固定问卷题目");
     }
 
     @Test

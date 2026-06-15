@@ -17,7 +17,7 @@
         <el-table-column prop="totalScore" label="总分" width="80" align="center" />
         <el-table-column label="成绩" width="100" align="center">
           <template #default="{ row }">
-            <span v-if="row.scoreGained !== undefined && row.scoreGained !== null" class="score-value">
+            <span v-if="row.status === 'GRADED' && row.scoreGained !== undefined && row.scoreGained !== null" class="score-value">
               {{ row.scoreGained }}
             </span>
             <span v-else>-</span>
@@ -33,20 +33,28 @@
         <el-table-column label="操作" width="150" align="center">
           <template #default="{ row }">
             <el-button 
-              v-if="row.status === 'ONGOING'" 
+              v-if="row.status === 'ONGOING' || row.status === 'UN'" 
               type="primary" 
               size="small"
               @click="startExam(row)"
             >
-              开始考试
+              {{ row.status === 'UN' ? '继续考试' : '开始考试' }}
             </el-button>
             <el-button 
-              v-else-if="row.status === 'SUBMITTED' || row.status === 'GRADED'" 
+              v-else-if="row.status === 'GRADED'" 
               type="info" 
               size="small"
               @click="viewResult(row)"
             >
               查看成绩
+            </el-button>
+            <el-button
+              v-else-if="row.status === 'SUBMITTED'"
+              type="warning"
+              size="small"
+              disabled
+            >
+              待批改
             </el-button>
             <el-button 
               v-else-if="row.status === 'NOT_STARTED'" 
@@ -96,7 +104,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { getStudentExamList, type StudentExamListItem } from '@/api/exam'
 
 const router = useRouter()
@@ -120,6 +128,7 @@ function formatTime(time: string): string {
 function getStatusType(status: string): string {
   const map: Record<string, string> = {
     ONGOING: 'success',
+    UN: 'warning',
     SUBMITTED: 'warning',
     GRADED: 'primary',
     NOT_STARTED: 'info',
@@ -131,6 +140,7 @@ function getStatusType(status: string): string {
 function getStatusText(status: string): string {
   const map: Record<string, string> = {
     ONGOING: '进行中',
+    UN: '答题中',
     SUBMITTED: '已提交',
     GRADED: '已完成',
     NOT_STARTED: '未开始',
@@ -197,7 +207,7 @@ onMounted(() => {
   font-weight: 700;
   text-align: center;
   margin-bottom: 20px;
-  color: #fff;
+  color: var(--text-primary);
   letter-spacing: 1px;
 }
 

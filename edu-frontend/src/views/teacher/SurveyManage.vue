@@ -88,54 +88,17 @@
 
       <div class="questions-section">
         <div class="section-header">
-          <span>题目配置</span>
-          <el-button type="primary" size="small" @click="addQuestion">添加题目</el-button>
+          <span>固定题目</span>
         </div>
 
-        <div v-for="(q, index) in form.questions" :key="index" class="question-item">
+        <div v-for="(q, index) in fixedSurveyQuestions" :key="index" class="question-item">
           <div class="question-header">
             <span class="question-num">第 {{ index + 1 }} 题</span>
-            <el-button type="danger" size="small" text @click="removeQuestion(index)">删除</el-button>
+            <el-tag size="small" :type="q.type === 'TEXT' ? 'info' : 'success'">
+              {{ q.type === 'TEXT' ? '文本回答' : '5分评分' }}
+            </el-tag>
           </div>
-          <el-form :model="q" label-width="80px" style="margin-top: 10px">
-            <el-form-item label="题型">
-              <el-select v-model="q.type" style="width: 100%">
-                <el-option label="星级评分 (STAR)" value="STAR" />
-                <el-option label="NPS评分 (NPS)" value="NPS" />
-                <el-option label="量表评分 (SCALE)" value="SCALE" />
-                <el-option label="文本回答 (TEXT)" value="TEXT" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="题干">
-              <el-input v-model="q.title" placeholder="请输入题目" />
-            </el-form-item>
-            <el-form-item label="必填">
-              <el-switch v-model="q.isRequired" :active-value="1" :inactive-value="0" />
-            </el-form-item>
-            <el-form-item v-if="q.type === 'STAR'" label="选项配置">
-              <div class="option-config">
-                <span>固定为5星评分</span>
-              </div>
-            </el-form-item>
-            <el-form-item v-if="q.type === 'NPS'" label="选项配置">
-              <div class="option-config">
-                <span>固定为0-10分推荐意愿评分</span>
-              </div>
-            </el-form-item>
-            <el-form-item v-if="q.type === 'SCALE'" label="量表配置">
-              <div class="scale-config">
-                <span>请在下方JSON中配置labels数组，如：["非常不同意","不同意","一般","同意","非常同意"]</span>
-              </div>
-            </el-form-item>
-            <el-form-item v-if="q.type === 'SCALE'" label="选项JSON">
-              <el-input
-                v-model="q.optionsJson"
-                type="textarea"
-                :rows="2"
-                placeholder='{"min":1,"max":5,"labels":["非常不同意","不同意","一般","同意","非常同意"]}'
-              />
-            </el-form-item>
-          </el-form>
+          <div class="question-title">{{ q.title }}</div>
         </div>
       </div>
 
@@ -154,7 +117,7 @@
 
 <script setup lang="ts">
 import { defineAsyncComponent, ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import {
   getSurveyList,
   createSurvey,
@@ -178,6 +141,15 @@ const surveyList = ref<SurveyListItem[]>([])
 const classList = ref<TeacherClass[]>([])
 const teacherList = ref<TeacherOption[]>([])
 
+const fixedSurveyQuestions = [
+  { type: 'STAR', title: '您对这次授课讲师打几分？满分5分', optionsJson: '[1,2,3,4,5]', isRequired: 1, sortOrder: 1 },
+  { type: 'STAR', title: '您对讲师授课的逻辑性打几分？满分5分', optionsJson: '[1,2,3,4,5]', isRequired: 1, sortOrder: 2 },
+  { type: 'STAR', title: '您对讲师上课的趣味性打几分？满分5分', optionsJson: '[1,2,3,4,5]', isRequired: 1, sortOrder: 3 },
+  { type: 'STAR', title: '讲师对学员关系度打几分？满分5分', optionsJson: '[1,2,3,4,5]', isRequired: 1, sortOrder: 4 },
+  { type: 'STAR', title: '讲师理论与工程结合能力您打几分？满分5分', optionsJson: '[1,2,3,4,5]', isRequired: 1, sortOrder: 5 },
+  { type: 'TEXT', title: '您对授课讲师的建议', optionsJson: '[]', isRequired: 1, sortOrder: 6 }
+]
+
 const formRef = ref()
 const form = reactive<CreateSurveyDTO>({
   title: '',
@@ -185,7 +157,7 @@ const form = reactive<CreateSurveyDTO>({
   targetClassIds: [],
   isAnonymousRequired: 0,
   targetTeacherId: 0,
-  questions: []
+  questions: fixedSurveyQuestions.map(q => ({ ...q }))
 })
 
 const rules = {
@@ -236,40 +208,20 @@ function openCreateDialog() {
   fetchTeacherList()
 }
 
-function addQuestion() {
-  form.questions.push({
-    type: 'STAR',
-    title: '',
-    optionsJson: '',
-    isRequired: 1,
-    sortOrder: form.questions.length + 1
-  })
-}
-
-function removeQuestion(index: number) {
-  form.questions.splice(index, 1)
-  form.questions.forEach((q, i) => {
-    q.sortOrder = i + 1
-  })
-}
-
 function resetForm() {
   form.title = ''
   form.endTime = ''
   form.targetClassIds = []
   form.isAnonymousRequired = 0
   form.targetTeacherId = 0
-  form.questions = []
+  form.questions = fixedSurveyQuestions.map(q => ({ ...q }))
 }
 
 async function handleCreate() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
-  if (form.questions.length === 0) {
-    ElMessage.warning('请至少添加一道题目')
-    return
-  }
+  form.questions = fixedSurveyQuestions.map(q => ({ ...q }))
 
   creating.value = true
   try {
@@ -310,38 +262,38 @@ onMounted(() => {
 
 .page {
   padding: 0;
-  background: #030303;
+  background: var(--bg-surface);
   min-height: 100%;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .page :deep(.el-card) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5) !important;
 }
 
 .page :deep(.el-card__header) {
   background: rgba(26, 26, 46, 0.4) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 15px 20px !important;
 }
 
 .page :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   padding: 20px !important;
 }
 
 .page :deep(.el-table) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  --el-table-bg-color: #0a0a0a !important;
-  --el-table-tr-bg-color: #0a0a0a !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  --el-table-bg-color: var(--bg-surface) !important;
+  --el-table-tr-bg-color: var(--bg-surface) !important;
   --el-table-header-bg-color: #111111 !important;
   --el-table-header-text-color: #00ffff !important;
-  --el-table-text-color: #e0e0e0 !important;
-  --el-table-border-color: #1a1a2e !important;
+  --el-table-text-color: var(--text-primary) !important;
+  --el-table-border-color: var(--border-subtle) !important;
   --el-table-row-hover-bg-color: rgba(0, 255, 255, 0.05) !important;
 }
 
@@ -349,17 +301,17 @@ onMounted(() => {
   background: #111111 !important;
   color: #00ffff !important;
   font-weight: 600 !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .page :deep(.el-table__body-wrapper tr) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .page :deep(.el-table__body-wrapper td) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
@@ -367,15 +319,15 @@ onMounted(() => {
 }
 
 .page :deep(.el-dialog) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));
   box-shadow: 0 0 50px rgba(255, 16, 240, 0.2), 0 0 100px rgba(0, 0, 0, 0.8) !important;
 }
 
 .page :deep(.el-dialog__header) {
   background: rgba(26, 26, 46, 0.5) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 15px 20px !important;
 }
 
@@ -386,14 +338,14 @@ onMounted(() => {
 }
 
 .page :deep(.el-dialog__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   padding: 25px !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-dialog__footer) {
   background: rgba(26, 26, 46, 0.3) !important;
-  border-top: 1px solid #1a1a2e !important;
+  border-top: 1px solid var(--border) !important;
   padding: 15px 20px !important;
 }
 
@@ -404,12 +356,12 @@ onMounted(() => {
 
 .page :deep(.el-input__wrapper) {
   background: #111111 !important;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
   box-shadow: none !important;
 }
 
 .page :deep(.el-input__inner) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-input__inner::placeholder) {
@@ -418,18 +370,18 @@ onMounted(() => {
 
 .page :deep(.el-select__wrapper) {
   background: #111111 !important;
-  border: 1px solid #1a1a2e !important;
+  border: 1px solid var(--border) !important;
   box-shadow: none !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-select__dropdown) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .page :deep(.el-select-dropdown__item) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 .page :deep(.el-select-dropdown__item.hover),
@@ -442,8 +394,8 @@ onMounted(() => {
 }
 
 .page :deep(.el-picker__popper) {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .header-bar {
@@ -461,7 +413,7 @@ onMounted(() => {
 
 .questions-section {
   margin-top: 20px;
-  border-top: 1px solid #1a1a2e;
+  border-top: 1px solid var(--border);
   padding-top: 20px;
 }
 
@@ -477,7 +429,7 @@ onMounted(() => {
 
 .question-item {
   background: #111111;
-  border: 1px solid #1a1a2e;
+  border: 1px solid var(--border);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
   padding: 15px;
   margin-bottom: 15px;
@@ -494,6 +446,13 @@ onMounted(() => {
   font-weight: 600;
   color: #ff10f0 !important;
   text-shadow: 0 0 8px rgba(255, 16, 240, 0.5) !important;
+}
+
+.question-title {
+  margin-top: 12px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .option-config,

@@ -15,8 +15,11 @@ public class ExamVO {
     private Integer totalScore;
     private Integer duration;
     private Integer passScore;
+    private Boolean requireSurveyBeforeSubmit;
+    private Long requiredSurveyId;
     private Long creatorId;
     private List<Long> targetClassIds;
     private String status;
+    private Boolean editable;
     private LocalDateTime createTime;
 }

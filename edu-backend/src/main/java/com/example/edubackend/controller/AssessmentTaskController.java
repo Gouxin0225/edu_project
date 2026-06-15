@@ -14,13 +14,16 @@ import com.example.edubackend.dto.QuestionExcelExportRow;
 import com.example.edubackend.dto.UpdateQuestionScoreDTO;
 import com.example.edubackend.entity.AssessmentTask;
 import com.example.edubackend.entity.QuestionBank;
+import com.example.edubackend.entity.StudentSubmission;
 import com.example.edubackend.entity.TaskQuestionRel;
 import com.example.edubackend.exception.BusinessException;
 import com.example.edubackend.mapper.AssessmentTaskMapper;
 import com.example.edubackend.mapper.QuestionBankMapper;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.IAssessmentTaskService;
+import com.example.edubackend.service.IStudentSubmissionService;
 import com.example.edubackend.service.ITaskQuestionRelService;
+import com.example.edubackend.service.OperationAuditLogService;
 import com.example.edubackend.service.QuestionExcelExportService;
 import com.example.edubackend.service.QuestionWordExportService;
 import com.example.edubackend.util.ExamSettingHelper;
@@ -48,16 +51,27 @@ public class AssessmentTaskController {
     private final AssessmentTaskMapper assessmentTaskMapper;
     private final QuestionBankMapper questionBankMapper;
     private final ITaskQuestionRelService taskQuestionRelService;
+    private final IStudentSubmissionService submissionService;
     private final ObjectMapper objectMapper;
     private final ExamSettingHelper examSettingHelper;
     private final QuestionExcelExportService questionExcelExportService;
     private final QuestionWordExportService questionWordExportService;
+    private final OperationAuditLogService auditLogService;
 
     @PostMapping
     @RequireRole({"ADMIN", "TEACHER"})
     public Result<ExamVO> createExam(@Valid @RequestBody CreateExamDTO dto) {
         Long userId = UserContext.getUserId();
         ExamVO exam = assessmentTaskService.createExam(dto, userId);
+        return Result.success(exam);
+    }
+
+    @PutMapping("/{id}")
+    @RequireRole({"ADMIN", "TEACHER"})
+    public Result<ExamVO> updateExam(@PathVariable Long id, @Valid @RequestBody CreateExamDTO dto) {
+        assertCanManageExam(id);
+        Long userId = UserContext.getUserId();
+        ExamVO exam = assessmentTaskService.updateExam(id, dto, userId);
         return Result.success(exam);
     }
 
@@ -113,7 +127,7 @@ public class AssessmentTaskController {
         
         List<ExamQuestionVO> result = new ArrayList<>();
         for (TaskQuestionRel rel : rels) {
-            QuestionBank q = questionBankMapper.selectById(rel.getQuestionId());
+            QuestionBank q = questionBankMapper.selectByIdIncludingDeleted(rel.getQuestionId());
             if (q != null) {
                 ExamQuestionVO vo = new ExamQuestionVO();
                 vo.setQuestionId(q.getId());
@@ -201,7 +215,10 @@ public class AssessmentTaskController {
     @RequireRole({"ADMIN", "TEACHER"})
     public Result<Void> publishExam(@PathVariable Long id) {
         assertCanManageExam(id);
+        AssessmentTask exam = assessmentTaskMapper.selectById(id);
         assessmentTaskService.publishExam(id);
+        auditLogService.record("EXAM_PUBLISH", "EXAM", id,
+                "发布考试 " + (exam == null ? id : exam.getTitle()));
         return Result.success("考试已发布");
     }
 
@@ -209,6 +226,9 @@ public class AssessmentTaskController {
     @RequireRole({"ADMIN", "TEACHER"})
     public Result<Void> deleteExam(@PathVariable Long id) {
         assertCanManageExam(id);
+        if (hasSubmissions(id)) {
+            throw new BusinessException(400, "已有学生开始或提交考试，不能删除考试");
+        }
         assessmentTaskMapper.deleteById(id);
         return Result.success("考试已删除");
     }
@@ -244,8 +264,17 @@ public class AssessmentTaskController {
         vo.setCreatorId(exam.getCreatorId());
         vo.setCreateTime(exam.getCreateTime());
         vo.setStatus(examSettingHelper.calculateStatus(exam));
+        vo.setEditable(!hasSubmissions(exam.getId()));
         vo.setTargetClassIds(parseTargetClassIds(exam.getTargetClassIds()));
         return vo;
+    }
+
+    private boolean hasSubmissions(Long examId) {
+        Long count = submissionService.count(
+                new LambdaQueryWrapper<StudentSubmission>()
+                        .eq(StudentSubmission::getTaskId, examId)
+        );
+        return count != null && count > 0;
     }
 
     private List<Long> parseTargetClassIds(String targetClassIdsJson) {

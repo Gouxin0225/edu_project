@@ -42,13 +42,17 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function logout() {
-    try {
-      await request.post('/auth/logout')
-    } finally {
-      token.value = ''
-      userInfo.value = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('userInfo')
+    const oldToken = token.value || localStorage.getItem('token') || ''
+    token.value = ''
+    userInfo.value = null
+    localStorage.removeItem('token')
+    localStorage.removeItem('userInfo')
+
+    if (oldToken) {
+      void request.post('/auth/logout', {}, {
+        headers: { Authorization: `Bearer ${oldToken}` },
+        silentError: true
+      }).catch(() => {})
     }
   }
 

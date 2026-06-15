@@ -128,6 +128,7 @@ initialize_database() {
         "student_visit_record_tables.sql"
         "exam_survey_session_fixes.sql"
         "must_change_password.sql"
+        "operation_audit_log.sql"
     )
 
     for script in "${scripts[@]}"; do
@@ -223,16 +224,29 @@ setup_nginx() {
     log "配置 Nginx..."
     
     cat > /etc/nginx/sites-available/edu-platform << 'EOF'
+limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
+
 server {
     listen 80;
     server_name _;
 
     client_max_body_size 100M;
 
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
+
     # 前端静态文件
     location / {
         root /edu-platform/edu-frontend/dist;
         try_files $uri $uri/ /index.html;
+    }
+
+    location @edu_spa {
+        root /edu-platform/edu-frontend/dist;
+        try_files /index.html =404;
     }
 
     # 后端 API 代理
@@ -244,6 +258,7 @@ server {
     }
 
     location /auth {
+        limit_req zone=login_limit burst=10 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -258,6 +273,10 @@ server {
     }
 
     location /admin {
+        error_page 418 = @edu_spa;
+        if ($http_accept ~* "text/html") {
+            return 418;
+        }
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -265,6 +284,10 @@ server {
     }
 
     location /teacher {
+        error_page 418 = @edu_spa;
+        if ($http_accept ~* "text/html") {
+            return 418;
+        }
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -299,6 +322,7 @@ Type=simple
 User=root
 WorkingDirectory=$BACKEND_DIR
 Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk"
+Environment="SERVER_ADDRESS=127.0.0.1"
 ExecStart=/usr/lib/jvm/java-17-openjdk/bin/java -jar $BACKEND_DIR/target/edu-backend-1.0.0.jar
 Restart=always
 RestartSec=10

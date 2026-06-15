@@ -39,14 +39,36 @@ export interface CreateStudentDTO {
   role: 'STUDENT'
 }
 
+export interface UpdateStudentDTO {
+  username: string
+  realName: string
+  phone?: string
+  schoolName?: string
+}
+
 export const getMyClasses = () =>
   request.get<any, { code: number; data: TeacherClass[] }>('/teacher/my-classes')
 
 export const createStudent = (data: CreateStudentDTO) =>
   request.post<any, { code: number; data: CreateUserResult }>('/teacher/student', data)
 
+export const searchExistingStudents = (params: { targetClassId: number; keyword: string; limit?: number }) =>
+  request.get<any, { code: number; data: StudentRecord[] }>('/teacher/students/search-existing', {
+    params: {
+      targetClassId: params.targetClassId,
+      keyword: params.keyword,
+      limit: params.limit || 20
+    }
+  })
+
 export const resetStudentPassword = (id: number) =>
   request.put<any, { code: number; data: ResetPasswordResult }>(`/teacher/student/${id}/reset-password`)
+
+export const updateStudent = (id: number, data: UpdateStudentDTO) =>
+  request.put<any, { code: number; data: StudentRecord }>(`/teacher/student/${id}`, data)
+
+export const removeStudentFromClass = (studentId: number, classId: number) =>
+  request.delete<any, { code: number }>(`/teacher/student/${studentId}/class/${classId}`)
 
 export const batchImportStudents = (classId: number, file: File) => {
   const formData = new FormData()
@@ -57,8 +79,10 @@ export const batchImportStudents = (classId: number, file: File) => {
   })
 }
 
-export const getStudentList = (classId?: number) => {
-  const params = classId ? { classId } : {}
+export const getStudentList = (classId?: number, keyword?: string) => {
+  const params: { classId?: number; keyword?: string } = {}
+  if (classId) params.classId = classId
+  if (keyword?.trim()) params.keyword = keyword.trim()
   return request.get<any, { code: number; data: StudentRecord[] }>('/teacher/students', { params })
 }
 export interface TeacherStatisticsOverview {

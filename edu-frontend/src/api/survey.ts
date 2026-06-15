@@ -14,7 +14,7 @@ export interface CreateSurveyDTO {
   targetClassIds: number[]
   isAnonymousRequired: number
   targetTeacherId: number
-  questions: QuestionConfig[]
+  questions?: QuestionConfig[]
 }
 
 export interface SurveyListItem {

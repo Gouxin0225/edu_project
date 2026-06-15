@@ -63,7 +63,7 @@ public class LoginInterceptor implements HandlerInterceptor {
             Long userId = jwtUtil.getUserIdFromToken(token);
             String username = jwtUtil.getUsernameFromToken(token);
 
-            if (!authTokenService.isActiveToken(userId, token)) {
+            if (!authTokenService.isActiveOrRestoreToken(userId, token)) {
                 sendUnauthorizedResponse(response, "登录状态已失效，请重新登录");
                 return false;
             }
@@ -76,7 +76,7 @@ public class LoginInterceptor implements HandlerInterceptor {
             }
             UserContext.setUser(user);
 
-            if (mustChangePassword(user) && !isPasswordChangeAllowedRequest(request)) {
+            if (isPasswordChangeRequired(user) && !isPasswordChangeAllowed(request)) {
                 sendPasswordChangeRequiredResponse(response, "请先修改初始密码");
                 return false;
             }
@@ -114,14 +114,14 @@ public class LoginInterceptor implements HandlerInterceptor {
         return StringUtils.hasText(userRole) && Arrays.asList(requireRole.value()).contains(userRole);
     }
 
-    private boolean mustChangePassword(SysUser user) {
+    private boolean isPasswordChangeRequired(SysUser user) {
         return user.getMustChangePassword() != null && user.getMustChangePassword() == 1;
     }
 
-    private boolean isPasswordChangeAllowedRequest(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        return ("/user/password".equals(uri) && "PUT".equalsIgnoreCase(request.getMethod()))
-                || ("/auth/logout".equals(uri) && "POST".equalsIgnoreCase(request.getMethod()));
+    private boolean isPasswordChangeAllowed(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return ("/user/password".equals(path) && "PUT".equalsIgnoreCase(request.getMethod()))
+                || ("/auth/logout".equals(path) && "POST".equalsIgnoreCase(request.getMethod()));
     }
 
     private void sendUnauthorizedResponse(HttpServletResponse response, String message) throws Exception {
@@ -150,4 +150,5 @@ public class LoginInterceptor implements HandlerInterceptor {
         result.put("message", message);
         response.getWriter().write(objectMapper.writeValueAsString(result));
     }
+
 }

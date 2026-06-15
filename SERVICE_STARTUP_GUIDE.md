@@ -217,6 +217,17 @@ curl --noproxy '*' -I http://127.0.0.1:3001
 
 前端代理配置会把 `/auth`、`/user`、`/admin`、`/teacher`、`/api` 转发到后端 `8080`。
 
+推荐使用统一冒烟测试脚本，脚本会固定绕过代理、设置连接超时，并校验后端、前端、前端代理和登录链路。登录账号必须显式指定，避免默认测试账号失效后产生误报：
+
+```bash
+cd /edu-platform
+BACKEND_URL=http://127.0.0.1:8080 \
+FRONTEND_URL=http://127.0.0.1:3001 \
+LOGIN_USERNAME=<测试账号> \
+LOGIN_PASSWORD=<测试密码> \
+./scripts/system-smoke-test.sh
+```
+
 可直接验证代理链路：
 
 ```bash

@@ -14,12 +14,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Register.vue'),
     meta: { requiresAuth: false }
   },
-  {
-    path: '/scsa-s',
-    name: 'ScsaPractice',
-    component: () => import('@/views/public/ScsaPractice.vue'),
-    meta: { requiresAuth: false }
-  },
   // ADMIN
   {
     path: '/admin',
@@ -29,9 +23,14 @@ const routes: RouteRecordRaw[] = [
       { path: '', redirect: '/admin/users' },
       { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManage.vue') },
       { path: 'classes', name: 'AdminClasses', component: () => import('@/views/admin/ClassManage.vue') },
+      { path: 'schedule-courses', name: 'AdminScheduleCourses', component: () => import('@/views/admin/ScheduleCourses.vue') },
+      { path: 'schedule-teachers', name: 'AdminScheduleTeachers', component: () => import('@/views/admin/ScheduleTeachers.vue') },
+      { path: 'campus-progress', name: 'AdminCampusProgress', component: () => import('@/views/common/CampusCourseProgress.vue') },
+      { path: 'course-pool', name: 'AdminSchedulingCoursePool', component: () => import('@/views/admin/SchedulingCoursePool.vue') },
       { path: 'questions', name: 'AdminQuestions', component: () => import('@/views/teacher/QuestionBank.vue') },
       { path: 'ai-chat', name: 'AdminAiChat', component: () => import('@/views/common/AiChat.vue') },
-      { path: 'statistics', name: 'AdminStatistics', component: () => import('@/views/admin/Statistics.vue') }
+      { path: 'statistics', name: 'AdminStatistics', component: () => import('@/views/admin/Statistics.vue') },
+      { path: 'audit-logs', name: 'AdminAuditLogs', component: () => import('@/views/admin/AuditLogs.vue') }
     ]
   },
   // TEACHER
@@ -48,6 +47,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'student-visits', name: 'TeacherStudentVisits', component: () => import('@/views/common/StudentVisits.vue') },
       { path: 'exams', name: 'TeacherExams', component: () => import('@/views/teacher/ExamList.vue') },
       { path: 'exams/create', name: 'TeacherExamCreate', component: () => import('@/views/teacher/ExamCreate.vue') },
+      { path: 'exams/edit/:id', name: 'TeacherExamEdit', component: () => import('@/views/teacher/ExamCreate.vue') },
       { path: 'exams/grade/:id', name: 'TeacherExamGrade', component: () => import('@/views/teacher/ExamGrade.vue') },
       { path: 'templates', name: 'TeacherTemplates', component: () => import('@/views/teacher/TemplateList.vue') },
       { path: 'homework', name: 'TeacherHomework', component: () => import('@/views/teacher/HomeworkManage.vue') },
@@ -63,10 +63,17 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: '/assistant/dashboard' },
       { path: 'dashboard', name: 'AssistantDashboard', component: () => import('@/views/assistant/Dashboard.vue') },
+      { path: 'profiles', name: 'AssistantStudentProfiles', component: () => import('@/views/assistant/StudentProfiles.vue') },
+      { path: 'class-board', name: 'AssistantClassBoard', component: () => import('@/views/assistant/ClassBoard.vue') },
+      { path: 'campus-progress', name: 'AssistantCampusProgress', component: () => import('@/views/common/CampusCourseProgress.vue') },
+      { path: 'risk-center', name: 'AssistantRiskCenter', component: () => import('@/views/assistant/RiskCenter.vue') },
+      { path: 'todo-center', name: 'AssistantTodoCenter', component: () => import('@/views/assistant/TodoCenter.vue') },
       { path: 'join-applications', name: 'AssistantJoinApplications', component: () => import('@/views/assistant/JoinApplications.vue') },
       { path: 'students', name: 'AssistantStudents', component: () => import('@/views/assistant/Students.vue') },
       { path: 'ai-chat', name: 'AssistantAiChat', component: () => import('@/views/common/AiChat.vue') },
+      { path: 'exams', name: 'AssistantExams', component: () => import('@/views/assistant/ExamTracking.vue') },
       { path: 'homework', name: 'AssistantHomework', component: () => import('@/views/assistant/Homework.vue') },
+      { path: 'surveys', name: 'AssistantSurveys', component: () => import('@/views/assistant/SurveyInsights.vue') },
       { path: 'student-visits', name: 'AssistantStudentVisits', component: () => import('@/views/common/StudentVisits.vue') },
       { path: 'statistics', name: 'AssistantStatistics', component: () => import('@/views/assistant/Statistics.vue') }
     ]
@@ -88,7 +95,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'exam/:id', name: 'StudentExamTaking', component: () => import('@/views/student/ExamTaking.vue') },
       { path: 'surveys', name: 'StudentSurveys', component: () => import('@/views/student/Surveys.vue') },
       { path: 'survey/:id', name: 'StudentSurveyFill', component: () => import('@/views/student/SurveyFill.vue') },
-      { path: 'scsa-s', name: 'StudentScsaPractice', component: () => import('@/views/public/ScsaPractice.vue') },
       { path: 'mistakes', name: 'StudentMistakes', component: () => import('@/views/student/Mistakes.vue') },
       { path: 'profile', name: 'StudentProfile', component: () => import('@/views/student/Profile.vue') }
     ]
@@ -96,7 +102,10 @@ const routes: RouteRecordRaw[] = [
   // 根路径重定向
   { path: '/', redirect: '/login' },
   // 404
-  { path: '/:pathMatch(.*)*', redirect: '/login' }
+  { path: '/:pathMatch(.*)*', redirect: () => {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null')
+    return userInfo?.role ? getRoleHome(userInfo.role) : '/login'
+  } }
 ]
 
 const router = createRouter({

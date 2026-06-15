@@ -17,6 +17,7 @@ public class QuestionVO {
     private String analysis;
     private Long creatorId;
     private String creatorName;
+    private Byte isAiGenerated;
     private Boolean isPublic;
     private LocalDateTime createTime;
 }

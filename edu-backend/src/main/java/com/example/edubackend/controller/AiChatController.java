@@ -7,6 +7,7 @@ import com.example.edubackend.dto.AiChatMessageDTO;
 import com.example.edubackend.dto.AiChatMessageVO;
 import com.example.edubackend.dto.AiChatSessionVO;
 import com.example.edubackend.dto.CreateAiChatSessionDTO;
+import com.example.edubackend.dto.UpdateAiChatSessionDTO;
 import com.example.edubackend.entity.SysUser;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.IAiChatService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -84,6 +86,14 @@ public class AiChatController {
         SysUser user = UserContext.getUser();
         aiChatService.cancelStreamMessage(id, user);
         return Result.success("已请求中断生成");
+    }
+
+    @PutMapping("/sessions/{id}")
+    public Result<AiChatSessionVO> updateSession(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateAiChatSessionDTO dto) {
+        SysUser user = UserContext.getUser();
+        return Result.success(aiChatService.updateSession(id, dto, user));
     }
 
     @DeleteMapping("/sessions/{id}")

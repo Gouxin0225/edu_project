@@ -5,6 +5,9 @@ import com.example.edubackend.dto.*;
 import com.example.edubackend.entity.*;
 import com.example.edubackend.exception.BusinessException;
 import com.example.edubackend.mapper.ClassStudentRelMapper;
+import com.example.edubackend.mapper.QuestionBankMapper;
+import com.example.edubackend.mapper.SurveyRecordMapper;
+import com.example.edubackend.mapper.SurveyTaskMapper;
 import com.example.edubackend.mapper.SysUserMapper;
 import com.example.edubackend.service.*;
 import com.example.edubackend.util.ExamSettingHelper;
@@ -15,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -30,13 +34,16 @@ public class ExamTakingServiceImpl implements IExamTakingService {
     private final IStudentSubmissionService submissionService;
     private final IStudentAnswerDetailService answerDetailService;
     private final IStudentMistakeBookService mistakeBookService;
-    private final IQuestionBankService questionBankService;
     private final ITaskQuestionRelService taskQuestionRelService;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final QuestionBankMapper questionBankMapper;
     private final SysUserMapper sysUserMapper;
     private final ClassStudentRelMapper classStudentRelMapper;
+    private final SurveyTaskMapper surveyTaskMapper;
+    private final SurveyRecordMapper surveyRecordMapper;
     private final ExamSettingHelper examSettingHelper;
+    private final TransactionTemplate transactionTemplate;
 
     private static final String REDIS_KEY_PREFIX = "exam:progress:";
     private static final long REDIS_EXPIRE_HOURS = 24;
@@ -245,6 +252,29 @@ public class ExamTakingServiceImpl implements IExamTakingService {
     }
 
     @Override
+    public ExamSubmitRequirementVO getSubmitRequirement(Long examId, Long studentId) {
+        AssessmentTask exam = assessmentTaskService.getById(examId);
+        if (exam == null) {
+            throw new BusinessException(404, "考试不存在");
+        }
+        assertCanTakeExam(exam, studentId);
+        StudentSubmission submission = submissionService.getOne(
+                new LambdaQueryWrapper<StudentSubmission>()
+                        .eq(StudentSubmission::getTaskId, examId)
+                        .eq(StudentSubmission::getStudentId, studentId)
+        );
+        if (submission != null && isSubmissionExpired(exam, submission, LocalDateTime.now())) {
+            ExamSubmitRequirementVO vo = new ExamSubmitRequirementVO();
+            vo.setRequireSurvey(false);
+            vo.setSurveySubmitted(true);
+            vo.setSurveyExpired(false);
+            vo.setMessage("考试时间已到，将直接交卷");
+            return vo;
+        }
+        return buildSubmitRequirement(exam, studentId);
+    }
+
+    @Override
     @Transactional
     public void submitExam(Long examId, Long studentId) {
         AssessmentTask exam = assessmentTaskService.getById(examId);
@@ -266,7 +296,63 @@ public class ExamTakingServiceImpl implements IExamTakingService {
         if ("SUBMITTED".equals(submission.getStatus()) || "GRADED".equals(submission.getStatus())) {
             throw new BusinessException(400, "考试已提交，无法重复提交");
         }
+        if (!isSubmissionExpired(exam, submission, LocalDateTime.now())) {
+            assertRequiredSurveySubmitted(exam, studentId);
+        }
+        submitSubmission(exam, submission);
+    }
 
+    @Override
+    public int autoSubmitExpiredExams() {
+        LocalDateTime now = LocalDateTime.now();
+        List<StudentSubmission> runningSubmissions = submissionService.list(
+                new LambdaQueryWrapper<StudentSubmission>()
+                        .eq(StudentSubmission::getStatus, "UN")
+                        .isNotNull(StudentSubmission::getStartTime)
+        );
+
+        int submittedCount = 0;
+        for (StudentSubmission runningSubmission : runningSubmissions) {
+            try {
+                AssessmentTask exam = assessmentTaskService.getById(runningSubmission.getTaskId());
+                if (!shouldAutoSubmit(exam, runningSubmission, now)) {
+                    continue;
+                }
+                StudentSubmission latestSubmission = submissionService.getById(runningSubmission.getId());
+                if (latestSubmission == null || !"UN".equals(latestSubmission.getStatus())) {
+                    continue;
+                }
+                transactionTemplate.executeWithoutResult(status -> submitSubmission(exam, latestSubmission));
+                submittedCount++;
+            } catch (Exception e) {
+                log.error("Failed to auto submit expired exam submission {}", runningSubmission.getId(), e);
+            }
+        }
+        if (submittedCount > 0) {
+            log.info("Auto submitted {} expired exam submissions", submittedCount);
+        }
+        return submittedCount;
+    }
+
+    private boolean shouldAutoSubmit(AssessmentTask exam, StudentSubmission submission, LocalDateTime now) {
+        if (exam == null || submission == null) {
+            return false;
+        }
+        if (!"EXAM".equals(exam.getType()) || !examSettingHelper.isPublished(exam)) {
+            return false;
+        }
+        LocalDateTime deadline = examSettingHelper.resolveExamDeadline(exam, submission.getStartTime());
+        return deadline != null && !deadline.isAfter(now);
+    }
+
+    private boolean isSubmissionExpired(AssessmentTask exam, StudentSubmission submission, LocalDateTime now) {
+        LocalDateTime deadline = examSettingHelper.resolveExamDeadline(exam, submission.getStartTime());
+        return deadline != null && !deadline.isAfter(now);
+    }
+
+    private void submitSubmission(AssessmentTask exam, StudentSubmission submission) {
+        Long examId = exam.getId();
+        Long studentId = submission.getStudentId();
         List<TaskQuestionRel> rels = taskQuestionRelService.list(
                 new LambdaQueryWrapper<TaskQuestionRel>()
                         .eq(TaskQuestionRel::getTaskId, examId)
@@ -286,7 +372,7 @@ public class ExamTakingServiceImpl implements IExamTakingService {
         }
 
         BigDecimal totalScore = BigDecimal.ZERO;
-        List<StudentAnswerDetail> wrongAnswers = new ArrayList<>();
+        Set<Long> mistakeQuestionIds = new LinkedHashSet<>();
         boolean hasSubjective = false;
 
         List<StudentAnswerDetail> answers = answerDetailService.list(
@@ -304,9 +390,9 @@ public class ExamTakingServiceImpl implements IExamTakingService {
 
             StudentAnswerDetail answer = answerMap.get(rel.getQuestionId());
             String studentAnswer = answer != null ? answer.getStudentAnswer() : null;
+            boolean unanswered = studentAnswer == null || studentAnswer.isBlank();
 
-            if ("SINGLE".equals(question.getType()) || "MULTIPLE".equals(question.getType())
-                    || "JUDGE".equals(question.getType())) {
+            if (isObjectiveQuestion(question)) {
                 boolean isCorrect = isObjectiveCorrect(question, studentAnswer);
                 BigDecimal scoreGained = isCorrect ? BigDecimal.valueOf(scoreMap.get(rel.getQuestionId())) : BigDecimal.ZERO;
 
@@ -321,8 +407,8 @@ public class ExamTakingServiceImpl implements IExamTakingService {
                 answerDetailService.saveOrUpdate(answer);
 
                 totalScore = totalScore.add(scoreGained);
-                if (!isCorrect) {
-                    wrongAnswers.add(answer);
+                if (unanswered || !isCorrect) {
+                    mistakeQuestionIds.add(rel.getQuestionId());
                 }
             } else {
                 hasSubjective = true;
@@ -333,30 +419,14 @@ public class ExamTakingServiceImpl implements IExamTakingService {
                     answer.setStudentAnswer(studentAnswer);
                     answerDetailService.save(answer);
                 }
+                if (unanswered || isSubjectiveQuestion(question)) {
+                    mistakeQuestionIds.add(rel.getQuestionId());
+                }
             }
         }
 
-        for (StudentAnswerDetail wrong : wrongAnswers) {
-            StudentMistakeBook existing = mistakeBookService.getOne(
-                    new LambdaQueryWrapper<StudentMistakeBook>()
-                            .eq(StudentMistakeBook::getStudentId, studentId)
-                            .eq(StudentMistakeBook::getQuestionId, wrong.getQuestionId())
-            );
-
-            if (existing != null) {
-                existing.setWrongCount(existing.getWrongCount() + 1);
-                existing.setLastWrongTime(LocalDateTime.now());
-                existing.setIsMastered((byte) 0);
-                mistakeBookService.updateById(existing);
-            } else {
-                StudentMistakeBook mistake = new StudentMistakeBook();
-                mistake.setStudentId(studentId);
-                mistake.setQuestionId(wrong.getQuestionId());
-                mistake.setWrongCount(1);
-                mistake.setLastWrongTime(LocalDateTime.now());
-                mistake.setIsMastered((byte) 0);
-                mistakeBookService.save(mistake);
-            }
+        for (Long questionId : mistakeQuestionIds) {
+            upsertMistake(studentId, questionId);
         }
 
         submission.setStatus(hasSubjective ? "SUBMITTED" : "GRADED");
@@ -408,10 +478,102 @@ public class ExamTakingServiceImpl implements IExamTakingService {
         int limit = examSettingHelper.getSwitchScreenLimit(exam);
         if (newCount >= limit) {
             log.info("Screen switch limit exceeded for exam {} student {}, forcing submit", examId, studentId);
-            submitExam(examId, studentId);
+            if (isRequiredSurveyPending(exam, studentId)) {
+                log.info("Exam {} student {} is blocked by required survey, defer forced submit to client", examId, studentId);
+            } else {
+                submitExam(examId, studentId);
+            }
         }
 
         return newCount;
+    }
+
+    private ExamSubmitRequirementVO buildSubmitRequirement(AssessmentTask exam, Long studentId) {
+        ExamSubmitRequirementVO vo = new ExamSubmitRequirementVO();
+        vo.setRequireSurvey(false);
+        vo.setSurveySubmitted(true);
+        vo.setSurveyExpired(false);
+
+        if (!examSettingHelper.isSurveyRequiredBeforeSubmit(exam)) {
+            return vo;
+        }
+
+        Long surveyId = examSettingHelper.getRequiredSurveyId(exam);
+        SurveyTask survey = getRequiredSurvey(surveyId);
+        SysUser student = sysUserMapper.selectById(studentId);
+        if (student == null || !isSurveyTargetedToStudent(survey, student)) {
+            throw new BusinessException(403, "无权提交考试绑定的问卷");
+        }
+
+        vo.setRequireSurvey(true);
+        vo.setSurveyId(survey.getId());
+        vo.setSurveyTitle(survey.getTitle());
+        boolean submitted = hasSubmittedSurvey(survey.getId(), studentId);
+        boolean expired = isRequiredSurveyExpired(survey);
+        vo.setSurveyExpired(expired);
+        vo.setSurveySubmitted(submitted);
+        if (submitted) {
+            vo.setMessage("已完成交卷前问卷");
+        } else if (expired) {
+            vo.setMessage("绑定的调查问卷已截止且未填写，无法提交试卷");
+        } else {
+            vo.setMessage("请先完成调查问卷后再提交试卷");
+        }
+        return vo;
+    }
+
+    private void assertRequiredSurveySubmitted(AssessmentTask exam, Long studentId) {
+        if (!isRequiredSurveyPending(exam, studentId)) {
+            return;
+        }
+        throw new BusinessException(400, "请先完成调查问卷后再提交试卷");
+    }
+
+    private boolean isRequiredSurveyPending(AssessmentTask exam, Long studentId) {
+        if (!examSettingHelper.isSurveyRequiredBeforeSubmit(exam)) {
+            return false;
+        }
+        Long surveyId = examSettingHelper.getRequiredSurveyId(exam);
+        SurveyTask survey = getRequiredSurvey(surveyId);
+        if (survey.getStatus() == null || survey.getStatus() != 1) {
+            throw new BusinessException(400, "考试绑定的问卷尚未发布");
+        }
+        SysUser student = sysUserMapper.selectById(studentId);
+        if (student == null || !isSurveyTargetedToStudent(survey, student)) {
+            throw new BusinessException(403, "无权提交考试绑定的问卷");
+        }
+        return !hasSubmittedSurvey(survey.getId(), studentId);
+    }
+
+    private boolean isRequiredSurveyExpired(SurveyTask survey) {
+        return survey.getEndTime() != null && LocalDateTime.now().isAfter(survey.getEndTime());
+    }
+
+    private SurveyTask getRequiredSurvey(Long surveyId) {
+        if (surveyId == null || surveyId <= 0) {
+            throw new BusinessException(400, "考试未配置交卷前问卷");
+        }
+        SurveyTask survey = surveyTaskMapper.selectById(surveyId);
+        if (survey == null) {
+            throw new BusinessException(404, "考试绑定的问卷不存在");
+        }
+        return survey;
+    }
+
+    private boolean hasSubmittedSurvey(Long surveyId, Long studentId) {
+        Long count = surveyRecordMapper.selectCount(new LambdaQueryWrapper<SurveyRecord>()
+                .eq(SurveyRecord::getSurveyId, surveyId)
+                .eq(SurveyRecord::getStudentId, studentId));
+        return count != null && count > 0;
+    }
+
+    private boolean isSurveyTargetedToStudent(SurveyTask survey, SysUser student) {
+        Set<Long> studentClassIds = getStudentClassIds(student);
+        if (studentClassIds.isEmpty()) {
+            return false;
+        }
+        List<Long> surveyClassIds = parseTargetClassIds(survey.getTargetClassIds());
+        return surveyClassIds.isEmpty() || surveyClassIds.stream().anyMatch(studentClassIds::contains);
     }
 
     private boolean isObjectiveCorrect(QuestionBank question, String studentAnswer) {
@@ -442,6 +604,40 @@ public class ExamTakingServiceImpl implements IExamTakingService {
         }
 
         return false;
+    }
+
+    private boolean isObjectiveQuestion(QuestionBank question) {
+        return "SINGLE".equals(question.getType())
+                || "MULTIPLE".equals(question.getType())
+                || "JUDGE".equals(question.getType());
+    }
+
+    private boolean isSubjectiveQuestion(QuestionBank question) {
+        return "SHORT".equals(question.getType()) || "CODE".equals(question.getType());
+    }
+
+    private void upsertMistake(Long studentId, Long questionId) {
+        StudentMistakeBook existing = mistakeBookService.getOne(
+                new LambdaQueryWrapper<StudentMistakeBook>()
+                        .eq(StudentMistakeBook::getStudentId, studentId)
+                        .eq(StudentMistakeBook::getQuestionId, questionId)
+        );
+
+        if (existing != null) {
+            existing.setWrongCount((existing.getWrongCount() == null ? 0 : existing.getWrongCount()) + 1);
+            existing.setLastWrongTime(LocalDateTime.now());
+            existing.setIsMastered((byte) 0);
+            mistakeBookService.updateById(existing);
+            return;
+        }
+
+        StudentMistakeBook mistake = new StudentMistakeBook();
+        mistake.setStudentId(studentId);
+        mistake.setQuestionId(questionId);
+        mistake.setWrongCount(1);
+        mistake.setLastWrongTime(LocalDateTime.now());
+        mistake.setIsMastered((byte) 0);
+        mistakeBookService.save(mistake);
     }
 
     private String getRedisKey(Long examId, Long studentId) {
@@ -538,7 +734,7 @@ public class ExamTakingServiceImpl implements IExamTakingService {
             return Map.of();
         }
 
-        List<QuestionBank> questions = questionBankService.listByIds(questionIds);
+        List<QuestionBank> questions = questionBankMapper.selectBatchIdsIncludingDeleted(questionIds);
         Map<Long, QuestionBank> questionMap = new HashMap<>();
         for (QuestionBank question : questions) {
             if (question.getId() != null) {

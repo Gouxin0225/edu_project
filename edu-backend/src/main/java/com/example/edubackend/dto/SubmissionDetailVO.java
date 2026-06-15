@@ -28,5 +28,7 @@ public class SubmissionDetailVO {
         private Boolean isCorrect;
         private BigDecimal scoreGained;
         private Integer questionScore;
+        private BigDecimal aiSuggestScore;
+        private String aiSuggestDetail;
     }
 }

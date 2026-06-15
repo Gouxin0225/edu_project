@@ -62,7 +62,22 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="problemCategory" label="问题分类" width="120" show-overflow-tooltip />
         <el-table-column prop="content" label="回访内容" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="conclusion" label="沟通结论" min-width="180" show-overflow-tooltip />
+        <el-table-column label="附件" width="90">
+          <template #default="{ row }">
+            <el-button v-if="row.attachmentUrl" text type="primary" @click="openAttachment(row.attachmentUrl)">查看</el-button>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="解决" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.resolved ? 'success' : 'warning'" size="small" effect="plain">
+              {{ row.resolved ? '已解决' : '未解决' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="回访时间" width="160">
           <template #default="{ row }">{{ formatTime(row.visitTime) }}</template>
         </el-table-column>
@@ -99,6 +114,11 @@
             <el-option v-for="item in resultOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="问题分类">
+          <el-select v-model="form.problemCategory" clearable placeholder="选择问题分类" style="width: 100%">
+            <el-option v-for="item in problemCategoryOptions" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="回访时间">
           <el-date-picker v-model="form.visitTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="默认当前时间" style="width: 100%" />
         </el-form-item>
@@ -107,6 +127,15 @@
         </el-form-item>
         <el-form-item label="回访内容" prop="content">
           <el-input v-model="form.content" type="textarea" :rows="5" maxlength="1000" show-word-limit placeholder="记录沟通情况、学生反馈、问题原因和后续动作" />
+        </el-form-item>
+        <el-form-item label="沟通结论">
+          <el-input v-model="form.conclusion" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="记录处理结果、家校共识或后续安排" />
+        </el-form-item>
+        <el-form-item label="附件链接">
+          <el-input v-model="form.attachmentUrl" maxlength="500" clearable placeholder="粘贴截图、文件或沟通凭证链接" />
+        </el-form-item>
+        <el-form-item label="是否解决">
+          <el-switch v-model="form.resolved" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -119,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ChatDotRound, Finished, Plus, Refresh, User } from '@element-plus/icons-vue'
 import { getMyClasses, getStudentList, type StudentRecord, type TeacherClass } from '@/api/teacher'
@@ -140,6 +169,8 @@ const resultOptions: Array<{ label: string; value: VisitResult }> = [
   { label: '已解决', value: 'RESOLVED' }
 ]
 
+const problemCategoryOptions = ['学习进度', '作业缺交', '考试低分', '切屏异常', '问卷反馈', '账号问题', '家校沟通', '其他']
+
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -154,7 +185,11 @@ const form = reactive({
   studentId: null as number | null,
   visitMethod: 'PHONE',
   visitResult: 'REACHED',
+  problemCategory: '',
   content: '',
+  conclusion: '',
+  attachmentUrl: '',
+  resolved: false,
   visitTime: null as string | null,
   nextFollowTime: null as string | null
 })
@@ -225,7 +260,11 @@ function openCreateDialog() {
   form.studentId = filters.studentId || null
   form.visitMethod = 'PHONE'
   form.visitResult = 'REACHED'
+  form.problemCategory = ''
   form.content = ''
+  form.conclusion = ''
+  form.attachmentUrl = ''
+  form.resolved = false
   form.visitTime = null
   form.nextFollowTime = null
   dialogVisible.value = true
@@ -241,6 +280,10 @@ async function submitRecord() {
       visitMethod: form.visitMethod,
       visitResult: form.visitResult,
       content: form.content,
+      problemCategory: form.problemCategory || null,
+      conclusion: form.conclusion || null,
+      attachmentUrl: form.attachmentUrl || null,
+      resolved: form.resolved || form.visitResult === 'RESOLVED',
       visitTime: form.visitTime || null,
       nextFollowTime: form.nextFollowTime || null
     })
@@ -269,6 +312,10 @@ function resultTagType(value: VisitResult) {
 
 function roleLabel(value: string) {
   return value === 'ASSISTANT' ? '班主任' : '讲师'
+}
+
+function openAttachment(url: string) {
+  window.open(url, '_blank')
 }
 
 function formatTime(value?: string | null) {
@@ -303,24 +350,24 @@ onMounted(loadInitialData)
 
 .page-header h2 {
   margin: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 24px;
   letter-spacing: 0;
 }
 
 .page-header p {
   margin: 6px 0 0;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
 .filter-panel,
 .table-panel,
 .summary-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(12, 20, 40, 0.74);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
 }
 
 .filter-panel,
@@ -350,19 +397,19 @@ onMounted(loadInitialData)
   place-items: center;
   border-radius: 8px;
   background: rgba(64, 128, 255, 0.12);
-  color: #8bb5ff;
+  color: #4080ff;
 }
 
 .summary-card strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
 }
 
 .summary-card span,
 .student-cell span {
-  color: rgba(226, 232, 240, 0.54);
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -372,7 +419,7 @@ onMounted(loadInitialData)
 }
 
 .student-cell strong {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .role-tag {
@@ -382,11 +429,11 @@ onMounted(loadInitialData)
 .visit-page :deep(.el-table) {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: rgba(15, 23, 42, 0.92);
-  --el-table-header-text-color: #cbd5e1;
-  --el-table-text-color: #e5e7eb;
-  --el-table-border-color: rgba(148, 163, 184, 0.14);
-  --el-table-row-hover-bg-color: rgba(64, 128, 255, 0.08);
+  --el-table-header-bg-color: var(--bg-base);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-text-color: var(--text-primary);
+  --el-table-border-color: var(--border-subtle);
+  --el-table-row-hover-bg-color: var(--surface-hover);
 }
 
 .visit-page :deep(.el-table th.el-table__cell),

@@ -4,6 +4,7 @@ import com.example.edubackend.annotation.RequireRole;
 import com.example.edubackend.context.UserContext;
 import com.example.edubackend.dto.ExamProgressVO;
 import com.example.edubackend.dto.ExamStartVO;
+import com.example.edubackend.dto.ExamSubmitRequirementVO;
 import com.example.edubackend.dto.SaveAnswerDTO;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.IExamTakingService;
@@ -40,6 +41,14 @@ public class ExamTakingController {
         Long studentId = UserContext.getUserId();
         examTakingService.saveAnswers(id, studentId, dto);
         return Result.success("答案已保存");
+    }
+
+    @GetMapping("/{id}/submit-requirement")
+    @RequireRole({"STUDENT"})
+    public Result<ExamSubmitRequirementVO> getSubmitRequirement(@PathVariable Long id) {
+        Long studentId = UserContext.getUserId();
+        ExamSubmitRequirementVO result = examTakingService.getSubmitRequirement(id, studentId);
+        return Result.success(result);
     }
 
     @PostMapping("/{id}/submit")

@@ -231,7 +231,10 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref } from 'vue'
-import { ElEmpty, ElMessage, ElProgress, ElTag } from 'element-plus'
+import { ElEmpty } from 'element-plus/es/components/empty/index'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElProgress } from 'element-plus/es/components/progress/index'
+import { ElTag } from 'element-plus/es/components/tag/index'
 import { Collection, DocumentChecked, Files, Refresh, School, Search, UserFilled, View, Warning } from '@element-plus/icons-vue'
 import {
   getAdminClassStatistics,
@@ -527,7 +530,7 @@ onMounted(loadData)
 .page-container {
   min-height: 100%;
   padding: 24px;
-  color: #e5e7eb;
+  color: var(--text-primary);
 }
 
 .page-header,
@@ -557,7 +560,7 @@ onMounted(loadData)
 .page-header h2,
 .drawer-header h3 {
   margin: 0;
-  color: #f8fafc;
+  color: var(--text-primary);
   letter-spacing: 0;
 }
 
@@ -569,7 +572,7 @@ onMounted(loadData)
 .drawer-header p,
 .work-head p {
   margin: 6px 0 0;
-  color: rgba(229, 231, 235, 0.62);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -586,8 +589,8 @@ onMounted(loadData)
 .drawer-metrics > div,
 .work-card,
 .people-detail > div {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--border);
+  background: var(--surface-card);
   border-radius: 8px;
 }
 
@@ -598,11 +601,11 @@ onMounted(loadData)
 .metric-icon {
   width: 22px;
   height: 22px;
-  color: #facc15;
+  color: var(--primary-light);
 }
 
 .metric-value {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 22px;
   font-weight: 700;
@@ -612,7 +615,7 @@ onMounted(loadData)
 .class-cell span,
 .people-cell span,
 .pending-cell span {
-  color: rgba(229, 231, 235, 0.58);
+  color: var(--text-secondary);
 }
 
 .toolbar {
@@ -640,7 +643,7 @@ onMounted(loadData)
 }
 
 .class-cell strong {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .rate-cell {
@@ -654,13 +657,13 @@ onMounted(loadData)
 }
 
 .pending-cell strong {
-  color: #fbbf24;
+  color: var(--color-warning);
   font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
 }
 
 .score-text {
-  color: #93c5fd;
+  color: var(--primary-light);
   font-family: 'JetBrains Mono', monospace;
   font-size: 16px;
 }
@@ -672,7 +675,7 @@ onMounted(loadData)
 }
 
 .score-sample {
-  color: rgba(229, 231, 235, 0.48);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
 }
@@ -694,7 +697,7 @@ onMounted(loadData)
 
 .drawer-metrics strong {
   display: block;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 22px;
 }
@@ -702,7 +705,7 @@ onMounted(loadData)
 .drawer-metrics span {
   display: block;
   margin-top: 6px;
-  color: rgba(229, 231, 235, 0.58);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -713,10 +716,10 @@ onMounted(loadData)
 
 .summary-strip {
   flex-wrap: wrap;
-  border: 1px solid rgba(250, 204, 21, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.28);
   border-radius: 8px;
-  background: rgba(250, 204, 21, 0.06);
-  color: rgba(254, 243, 199, 0.88);
+  background: rgba(245, 158, 11, 0.10);
+  color: var(--text-primary);
   padding: 10px 12px;
   font-size: 12px;
 }
@@ -731,13 +734,13 @@ onMounted(loadData)
 }
 
 .work-head strong {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .work-stats {
   flex-wrap: wrap;
   margin-top: 10px;
-  color: rgba(229, 231, 235, 0.68);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -754,7 +757,7 @@ onMounted(loadData)
 
 .people-detail h4 {
   margin: 0 0 12px;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .tag-list {
@@ -770,11 +773,11 @@ onMounted(loadData)
 .page-container :deep(.el-table) {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: rgba(15, 23, 42, 0.92);
-  --el-table-header-text-color: #cbd5e1;
-  --el-table-text-color: #e5e7eb;
-  --el-table-border-color: rgba(148, 163, 184, 0.14);
-  --el-table-row-hover-bg-color: rgba(64, 128, 255, 0.08);
+  --el-table-header-bg-color: var(--surface-muted);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-text-color: var(--text-primary);
+  --el-table-border-color: var(--border);
+  --el-table-row-hover-bg-color: var(--surface-hover);
 }
 
 .page-container :deep(.el-table th.el-table__cell),
@@ -783,48 +786,48 @@ onMounted(loadData)
 }
 
 .page-container :deep(.el-drawer) {
-  background: #08111f;
-  color: #e5e7eb;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 :global(.class-drawer) {
-  background: #08111f !important;
-  color: #e5e7eb !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 :global(.class-drawer .el-drawer__body) {
-  background: #08111f !important;
-  color: #e5e7eb !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
   padding: 0 !important;
 }
 
 :global(.class-drawer .el-tabs__item) {
-  color: rgba(229, 231, 235, 0.68) !important;
+  color: var(--text-secondary) !important;
 }
 
 :global(.class-drawer .el-tabs__item.is-active),
 :global(.class-drawer .el-tabs__item:hover) {
-  color: #93c5fd !important;
+  color: var(--primary-light) !important;
 }
 
 :global(.class-drawer .el-tabs__active-bar) {
-  background-color: #93c5fd !important;
+  background-color: var(--primary-light) !important;
 }
 
 :global(.class-drawer .el-tabs__nav-wrap::after) {
-  background-color: rgba(148, 163, 184, 0.18) !important;
+  background-color: var(--border) !important;
 }
 
 :global(.class-drawer .el-progress__text) {
-  color: #e5e7eb !important;
+  color: var(--text-primary) !important;
 }
 
 :global(.class-drawer .el-empty__description p) {
-  color: rgba(229, 231, 235, 0.58) !important;
+  color: var(--text-secondary) !important;
 }
 
 :global(.class-drawer .el-tag) {
-  background: rgba(15, 23, 42, 0.86) !important;
+  background: var(--surface-muted) !important;
 }
 
 @media (max-width: 1200px) {

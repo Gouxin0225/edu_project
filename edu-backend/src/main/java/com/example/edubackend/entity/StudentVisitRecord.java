@@ -43,6 +43,18 @@ public class StudentVisitRecord implements Serializable {
     @TableField("content")
     private String content;
 
+    @TableField("problem_category")
+    private String problemCategory;
+
+    @TableField("conclusion")
+    private String conclusion;
+
+    @TableField("attachment_url")
+    private String attachmentUrl;
+
+    @TableField("is_resolved")
+    private Byte isResolved;
+
     @TableField("next_follow_time")
     private LocalDateTime nextFollowTime;
 

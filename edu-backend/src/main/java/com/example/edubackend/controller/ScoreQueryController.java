@@ -2,6 +2,7 @@ package com.example.edubackend.controller;
 
 import com.example.edubackend.annotation.RequireRole;
 import com.example.edubackend.context.UserContext;
+import com.example.edubackend.dto.ExamAnswerDetailExportRow;
 import com.example.edubackend.dto.ExamStatisticsVO;
 import com.example.edubackend.dto.StudentExamRecordVO;
 import com.example.edubackend.dto.StudentExamListVO;
@@ -13,6 +14,8 @@ import com.example.edubackend.result.Result;
 import com.example.edubackend.service.IAssessmentTaskService;
 import com.example.edubackend.service.IStudentSubmissionService;
 import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.ExcelWriter;
+import com.alibaba.excel.write.metadata.WriteSheet;
 import com.example.edubackend.dto.ScoreExportDTO;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -69,16 +72,25 @@ public class ScoreQueryController {
     @RequireRole({"ADMIN", "TEACHER"})
     public void exportScores(@PathVariable Long id, HttpServletResponse response) throws IOException {
         assertCanManageExam(id);
-        List<ScoreExportDTO> data = submissionService.getExportData(id);
+        AssessmentTask exam = assessmentTaskMapper.selectById(id);
+        List<ScoreExportDTO> scoreRows = submissionService.getExportData(id);
+        List<ExamAnswerDetailExportRow> answerRows = submissionService.getAnswerExportData(id);
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
-        String fileName = URLEncoder.encode("成绩单", StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+        String fileName = URLEncoder.encode(safeFileName(exam.getTitle()) + "-答题成绩", StandardCharsets.UTF_8).replaceAll("\\+", "%20");
         response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
 
-        EasyExcel.write(response.getOutputStream(), ScoreExportDTO.class)
-                .sheet("成绩单")
-                .doWrite(data);
+        try (ExcelWriter writer = EasyExcel.write(response.getOutputStream()).build()) {
+            WriteSheet scoreSheet = EasyExcel.writerSheet(0, "成绩汇总")
+                    .head(ScoreExportDTO.class)
+                    .build();
+            WriteSheet answerSheet = EasyExcel.writerSheet(1, "答题明细")
+                    .head(ExamAnswerDetailExportRow.class)
+                    .build();
+            writer.write(scoreRows, scoreSheet);
+            writer.write(answerRows, answerSheet);
+        }
     }
 
     private void assertCanManageExam(Long examId) {
@@ -93,5 +105,12 @@ public class ScoreQueryController {
         if (!"ADMIN".equals(role) && !exam.getCreatorId().equals(UserContext.getUserId())) {
             throw new BusinessException(403, "只能管理自己创建的考试");
         }
+    }
+
+    private String safeFileName(String value) {
+        if (value == null || value.isBlank()) {
+            return "考试";
+        }
+        return value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
     }
 }

@@ -16,6 +16,10 @@ export interface StudentVisitRecord {
   visitMethod: VisitMethod
   visitResult: VisitResult
   content: string
+  problemCategory?: string | null
+  conclusion?: string | null
+  attachmentUrl?: string | null
+  resolved?: boolean
   nextFollowTime: string | null
   visitTime: string
   createTime: string
@@ -26,6 +30,10 @@ export interface CreateStudentVisitRecordDTO {
   visitMethod: VisitMethod
   visitResult: VisitResult
   content: string
+  problemCategory?: string | null
+  conclusion?: string | null
+  attachmentUrl?: string | null
+  resolved?: boolean
   nextFollowTime?: string | null
   visitTime?: string | null
 }

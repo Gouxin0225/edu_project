@@ -113,9 +113,25 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { BarChart, RadarChart, type BarSeriesOption, type RadarSeriesOption } from 'echarts/charts'
+import {
+  GridComponent,
+  RadarComponent,
+  TooltipComponent,
+  type GridComponentOption,
+  type RadarComponentOption,
+  type TooltipComponentOption
+} from 'echarts/components'
+import { graphic, init, use, type ComposeOption, type ECharts } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
 import { getSurveyStatistics, type SurveyStatistics } from '@/api/survey'
+
+use([BarChart, RadarChart, GridComponent, RadarComponent, TooltipComponent, CanvasRenderer])
+
+type ECOption = ComposeOption<
+  BarSeriesOption | RadarSeriesOption | GridComponentOption | RadarComponentOption | TooltipComponentOption
+>
 
 const props = defineProps<{
   surveyId: number
@@ -133,8 +149,8 @@ const statistics = reactive<SurveyStatistics>({
 
 const radarChartRef = ref<HTMLElement>()
 const barChartRefs = ref<HTMLElement[]>([])
-let radarChart: echarts.ECharts | null = null
-const barCharts: Map<number, echarts.ECharts> = new Map()
+let radarChart: ECharts | null = null
+const barCharts: Map<number, ECharts> = new Map()
 
 const npsScore = computed(() => {
   if (!statistics.nps) return 0
@@ -173,7 +189,7 @@ function initRadarChart() {
     radarChart.dispose()
   }
 
-  radarChart = echarts.init(radarChartRef.value)
+  radarChart = init(radarChartRef.value)
 
   const indicator = statistics.radarData.map(item => ({
     name: item.questionTitle.length > 10 ? item.questionTitle.substring(0, 10) + '...' : item.questionTitle,
@@ -182,7 +198,7 @@ function initRadarChart() {
 
   const values = statistics.radarData.map(item => item.avgScore || 0)
 
-  const option = {
+  const option: ECOption = {
     backgroundColor: '#0a0a0a',
     radar: {
       indicator,
@@ -213,7 +229,7 @@ function initRadarChart() {
         value: values,
         name: '评分',
         areaStyle: {
-          color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
+          color: new graphic.RadialGradient(0.5, 0.5, 1, [
             { offset: 0, color: 'rgba(255, 16, 240, 0.6)' },
             { offset: 1, color: 'rgba(0, 255, 255, 0.1)' }
           ])
@@ -243,12 +259,12 @@ function initBarCharts() {
       barCharts.get(q.questionId)?.dispose()
     }
 
-    const chart = echarts.init(container)
+    const chart = init(container)
     barCharts.set(q.questionId, chart)
 
     const gradientColors = ['#00ffff', '#ff10f0', '#39ff14']
 
-    const option = {
+    const option: ECOption = {
       backgroundColor: '#0a0a0a',
       tooltip: {
         trigger: 'axis',
@@ -281,7 +297,7 @@ function initBarCharts() {
         data: q.distribution?.map((d, i) => ({
           value: (d.rate * 100).toFixed(1),
           itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            color: new graphic.LinearGradient(0, 0, 0, 1, [
               { offset: 0, color: gradientColors[i % gradientColors.length] },
               { offset: 1, color: 'rgba(10, 10, 10, 0.8)' }
             ])
@@ -318,16 +334,16 @@ onMounted(() => {
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 .stats-container {
-  background: #030303;
+  background: var(--bg-surface);
   min-height: 100%;
   padding: 20px;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .stats-header {
-  background: #0a0a0a;
+  background: var(--bg-surface);
   padding: 20px;
-  border: 1px solid #1a1a2e;
+  border: 1px solid var(--border);
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   margin-bottom: 20px;
   display: flex;
@@ -350,7 +366,7 @@ onMounted(() => {
 
 .total-count .label {
   display: block;
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   font-size: 14px;
 }
 
@@ -373,8 +389,8 @@ onMounted(() => {
 }
 
 .cyber-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.08), inset 0 0 40px rgba(0, 0, 0, 0.5) !important;
   height: 100%;
@@ -382,12 +398,12 @@ onMounted(() => {
 
 .cyber-card :deep(.el-card__header) {
   background: rgba(26, 26, 46, 0.3) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 12px 15px !important;
 }
 
 .cyber-card :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   padding: 15px !important;
 }
 
@@ -422,7 +438,7 @@ onMounted(() => {
 }
 
 .nps-desc {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   font-size: 14px;
   margin-top: 10px;
 }
@@ -440,7 +456,7 @@ onMounted(() => {
 
 .nps-item .label {
   display: block;
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   font-size: 13px;
   margin-bottom: 5px;
 }
@@ -468,14 +484,14 @@ onMounted(() => {
 
 .chart-container {
   height: 280px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
 }
 
 .bar-chart-container {
   height: 200px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
 }
 
 .question-content {
@@ -484,7 +500,7 @@ onMounted(() => {
 
 .avg-score {
   font-size: 16px;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   margin-bottom: 15px;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -506,7 +522,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   background: linear-gradient(90deg, rgba(0, 255, 255, 0.8), rgba(255, 16, 240, 0.8)) !important;
-  color: #fff;
+  color: var(--text-primary);
   padding: 8px 12px;
   min-width: 40px;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px) !important;
@@ -537,7 +553,7 @@ onMounted(() => {
 }
 
 .no-data {
-  color: #666 !important;
+  color: var(--text-secondary) !important;
   text-align: center;
   padding: 20px;
   font-family: 'JetBrains Mono', monospace;

@@ -36,7 +36,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getRoleHome } from '@/router'
@@ -77,10 +77,11 @@ const rules: FormRules = {
 }
 
 async function submit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (loading.value) return
   loading.value = true
   try {
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid) return
     await userStore.register({
       realName: form.realName,
       phone: form.phone,
@@ -106,8 +107,8 @@ async function submit() {
 
 .register-card {
   width: min(520px, 100%);
-  background: rgba(12, 20, 40, 0.9);
-  border: 1px solid rgba(64, 128, 255, 0.22);
+  background: var(--auth-card-bg);
+  border: 1px solid var(--primary-border);
   border-radius: 16px;
 }
 
@@ -121,12 +122,12 @@ async function submit() {
 
 h2 {
   margin: 0 0 8px;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 p {
   margin: 0;
-  color: rgba(226, 232, 240, 0.62);
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 

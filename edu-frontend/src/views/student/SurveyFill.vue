@@ -101,7 +101,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { Warning } from '@element-plus/icons-vue'
 import { getSurveyDetail, submitSurvey, type SurveyDetail, type SurveyAnswer } from '@/api/survey'
 
@@ -231,23 +231,23 @@ onMounted(() => {
 <style scoped>
 .page {
   padding: 0;
-  background: var(--bg-base, #030303);
+  background: var(--bg-base);
   min-height: 100vh;
 }
 
 .survey-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 :deep(.el-card__header) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .header-bar {
@@ -292,7 +292,7 @@ onMounted(() => {
 }
 
 .survey-info {
-  color: #909090;
+  color: var(--text-secondary);
   font-size: 14px;
   margin-bottom: 0;
   font-family: 'JetBrains Mono', monospace;
@@ -303,13 +303,13 @@ onMounted(() => {
 }
 
 .cyberpunk-divider {
-  border-color: #1a1a2e !important;
+  border-color: var(--border-subtle) !important;
   margin: 16px 0 !important;
 }
 
 .question-block {
   padding: 20px 0;
-  border-bottom: 1px solid #1a1a2e;
+  border-bottom: 1px solid var(--border);
 }
 
 .question-block:last-of-type {
@@ -319,7 +319,7 @@ onMounted(() => {
 .question-title {
   font-size: 15px;
   font-weight: 500;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin-bottom: 16px;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -349,7 +349,7 @@ onMounted(() => {
 }
 
 :deep(.el-rate__text) {
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -363,7 +363,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #909090;
+  color: var(--text-secondary);
   width: 400px;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -376,9 +376,9 @@ onMounted(() => {
 
 .nps-btn {
   width: 44px;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -431,13 +431,13 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #909090;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-slider :deep(.el-slider__runway) {
-  background-color: #1a1a2e !important;
+  background-color: var(--bg-surface) !important;
 }
 
 .cyberpunk-slider :deep(.el-slider__bar) {
@@ -447,19 +447,19 @@ onMounted(() => {
 
 .cyberpunk-slider :deep(.el-slider__button) {
   border-color: #ff10f0 !important;
-  background-color: #0a0a0a !important;
+  background-color: var(--bg-surface) !important;
   box-shadow: 0 0 10px rgba(255, 16, 240, 0.5);
 }
 
 :deep(.el-slider__marks .el-slider__marks-text) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyberpunk-textarea :deep(.el-textarea__inner) {
-  background-color: #0a0a0a !important;
-  border-color: #1a1a2e !important;
-  color: #e0e0e0 !important;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -474,13 +474,13 @@ onMounted(() => {
   gap: 16px;
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid #1a1a2e;
+  border-top: 1px solid var(--border);
 }
 
 .cancel-btn {
   background: transparent !important;
-  border: 1px solid #666 !important;
-  color: #909090 !important;
+  border: 1px solid var(--text-secondary) !important;
+  color: var(--text-secondary) !important;
   font-family: 'JetBrains Mono', monospace;
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
 }

@@ -13,6 +13,10 @@ public class GradeItemDTO {
     
     @NotNull(message = "得分不能为空")
     private BigDecimal scoreGained;
+
+    private BigDecimal aiSuggestScore;
+
+    private String aiSuggestDetail;
     
     private String comment;
 }

@@ -44,6 +44,7 @@ export interface AiChatSession {
   courseCategory?: string
   knowledgePoint?: string
   userRole: 'ADMIN' | 'TEACHER' | 'ASSISTANT' | 'STUDENT'
+  isTop: boolean
   lastMessageTime: string
   createTime: string
   updateTime: string
@@ -90,6 +91,9 @@ export const sendAiChatSessionMessage = (sessionId: number, data: AiChatMessageP
 
 export const deleteAiChatSession = (sessionId: number) =>
   request.delete<any, { code: number }>(`/api/ai-chat/sessions/${sessionId}`)
+
+export const updateAiChatSession = (sessionId: number, data: { title?: string; isTop?: boolean }) =>
+  request.put<any, { code: number; data: AiChatSession }>(`/api/ai-chat/sessions/${sessionId}`, data)
 
 export interface AiChatStreamEvent {
   event: 'start' | 'delta' | 'done' | 'error' | 'interrupted'

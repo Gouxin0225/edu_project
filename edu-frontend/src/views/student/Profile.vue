@@ -24,11 +24,6 @@
             </span>
           </div>
         </div>
-        <div class="hero-actions">
-          <el-button type="primary" :icon="Lock" @click="showChangePwd = true" class="cyberpunk-btn">
-            修改密码
-          </el-button>
-        </div>
       </div>
     </el-card>
 
@@ -105,6 +100,10 @@
                 <span class="legend-dot" style="background: rgba(0, 255, 255, 0.1); border: 1px solid rgba(0, 255, 255, 0.3)"></span>
                 <span>待完成 {{ stats.pendingCount + stats.upcomingCount }}</span>
               </div>
+              <div class="legend-item">
+                <span class="legend-dot" style="background: rgba(115, 87, 255, 0.55); border: 1px solid rgba(115, 87, 255, 0.85)"></span>
+                <span>待批改 {{ stats.submittedCount }}</span>
+              </div>
             </div>
           </div>
         </el-card>
@@ -137,7 +136,6 @@
       </el-col>
     </el-row>
 
-    <ChangePasswordDialog v-model:visible="showChangePwd" />
   </div>
 </template>
 
@@ -146,16 +144,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboard, getMistakeList } from '@/api/student'
 import type { TaskVO } from '@/api/student'
-import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
-import { Lock } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
-const showChangePwd = ref(false)
 const loadingStats = ref(false)
 
 const stats = ref({
   upcomingCount: 0,
   pendingCount: 0,
+  submittedCount: 0,
   completedCount: 0,
   mistakeCount: 0
 })
@@ -175,21 +171,21 @@ const roleText = computed(() => {
 })
 
 const completionRate = computed(() => {
-  const total = stats.value.completedCount + stats.value.pendingCount + stats.value.upcomingCount
+  const total = stats.value.completedCount + stats.value.pendingCount + stats.value.upcomingCount + stats.value.submittedCount
   if (total === 0) return 0
   return stats.value.completedCount / total
 })
 
 function statusText(status: string) {
   const map: Record<string, string> = {
-    UPCOMING: '即将开始', PENDING: '待完成', SUBMITTED: '已提交', COMPLETED: '已完成'
+    UPCOMING: '即将开始', PENDING: '待完成', RETURNED: '退回待重交', SUBMITTED: '待批改', COMPLETED: '已完成'
   }
   return map[status] || status
 }
 
 function statusTagType(status: string): any {
   const map: Record<string, string> = {
-    UPCOMING: 'warning', PENDING: 'danger', SUBMITTED: 'info', COMPLETED: 'success'
+    UPCOMING: 'warning', PENDING: 'danger', RETURNED: 'danger', SUBMITTED: 'info', COMPLETED: 'success'
   }
   return map[status] || 'info'
 }
@@ -207,14 +203,17 @@ async function loadData() {
       getMistakeList()
     ])
     const d = dashRes.data
+    const todoTasks = d.todoTasks || d.pendingTasks || []
     stats.value.upcomingCount  = d.upcomingTasks?.length  ?? 0
-    stats.value.pendingCount   = d.pendingTasks?.length   ?? 0
+    stats.value.pendingCount   = todoTasks.length
+    stats.value.submittedCount = d.submittedTasks?.length ?? 0
     stats.value.completedCount = d.completedTasks?.length ?? 0
     stats.value.mistakeCount   = (mistakeRes.data || []).length
 
     const all: TaskVO[] = [
-      ...(d.pendingTasks || []),
+      ...todoTasks,
       ...(d.upcomingTasks || []),
+      ...(d.submittedTasks || []),
       ...(d.completedTasks || [])
     ]
     recentTasks.value = all.slice(0, 10)
@@ -232,19 +231,19 @@ onMounted(loadData)
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: var(--bg-base, #030303);
+  background: var(--bg-base);
   min-height: 100vh;
   padding: 0;
 }
 
 .profile-hero :deep(.el-card__body) {
   padding: 28px 32px;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .profile-hero {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
@@ -270,7 +269,7 @@ onMounted(loadData)
 .avatar-inner {
   width: 100%;
   height: 100%;
-  background: #0a0a0a;
+  background: var(--bg-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -306,7 +305,7 @@ onMounted(loadData)
 .user-realname {
   font-size: 24px;
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin: 0 0 8px;
   letter-spacing: 1px;
   font-family: 'JetBrains Mono', monospace;
@@ -318,7 +317,7 @@ onMounted(loadData)
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #909090;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -329,7 +328,7 @@ onMounted(loadData)
 }
 
 .meta-divider {
-  color: #333;
+  color: var(--text-secondary);
 }
 
 .hero-actions {
@@ -341,8 +340,8 @@ onMounted(loadData)
 }
 
 .stat-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
 }
 
@@ -353,7 +352,7 @@ onMounted(loadData)
   align-items: center;
   text-align: center;
   gap: 8px;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .stat-icon-wrap {
@@ -404,25 +403,25 @@ onMounted(loadData)
 
 .stat-label {
   font-size: 12px;
-  color: #909090;
+  color: var(--text-secondary);
   letter-spacing: 0.5px;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .completion-card :deep(.el-card__body) {
   padding: 20px;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .completion-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
 }
 
 :deep(.el-card__header) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .card-header {
@@ -456,7 +455,7 @@ onMounted(loadData)
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #909090;
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -468,12 +467,12 @@ onMounted(loadData)
 
 .activity-card :deep(.el-card__body) {
   padding: 16px 20px;
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .activity-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
 }
 
@@ -485,7 +484,7 @@ onMounted(loadData)
 
 .empty-tip {
   text-align: center;
-  color: #909090;
+  color: var(--text-secondary);
   padding: 30px 0;
   font-size: 13px;
   font-family: 'JetBrains Mono', monospace;
@@ -502,7 +501,7 @@ onMounted(loadData)
   align-items: center;
   gap: 12px;
   padding: 10px 4px;
-  border-bottom: 1px solid #1a1a2e;
+  border-bottom: 1px solid var(--border);
 }
 
 .task-item:last-child {
@@ -539,7 +538,7 @@ onMounted(loadData)
 
 .task-title {
   font-size: 13px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -549,7 +548,7 @@ onMounted(loadData)
 
 .task-sub {
   font-size: 11px;
-  color: #909090;
+  color: var(--text-secondary);
   margin-top: 2px;
   font-family: 'JetBrains Mono', monospace;
 }

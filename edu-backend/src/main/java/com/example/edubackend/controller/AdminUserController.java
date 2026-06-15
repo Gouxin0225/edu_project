@@ -10,7 +10,6 @@ import com.example.edubackend.dto.CreateUserDTO;
 import com.example.edubackend.dto.CreateUserRespDTO;
 import com.example.edubackend.dto.ImportUserDTO;
 import com.example.edubackend.dto.PasswordResetRespDTO;
-import com.example.edubackend.dto.ResetPasswordDTO;
 import com.example.edubackend.dto.StudentClassHistoryVO;
 import com.example.edubackend.dto.StudentInfoVO;
 import com.example.edubackend.entity.ClassStudentRel;
@@ -24,7 +23,7 @@ import com.example.edubackend.mapper.SysUserMapper;
 import com.example.edubackend.mapper.TeacherClassRelMapper;
 import com.example.edubackend.result.Result;
 import com.example.edubackend.service.AuthTokenService;
-import com.example.edubackend.util.SecurePasswordGenerator;
+import com.example.edubackend.service.OperationAuditLogService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +42,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/admin")
 @RequiredArgsConstructor
 public class AdminUserController {
+    private static final String DEFAULT_INITIAL_PASSWORD = "openlab@123";
 
     private final SysUserMapper sysUserMapper;
     private final TeacherClassRelMapper teacherClassRelMapper;
@@ -50,6 +50,7 @@ public class AdminUserController {
     private final ClassStudentRelMapper classStudentRelMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AuthTokenService authTokenService;
+    private final OperationAuditLogService auditLogService;
 
     @PostMapping("/user")
     @RequireRole("ADMIN")
@@ -64,7 +65,7 @@ public class AdminUserController {
             throw new BusinessException(400, "用户名已存在");
         }
 
-        String initialPassword = generateInitialPassword(dto.getUsername());
+        String initialPassword = DEFAULT_INITIAL_PASSWORD;
         
         SysUser user = new SysUser();
         user.setUsername(dto.getUsername());
@@ -76,6 +77,8 @@ public class AdminUserController {
         user.setMustChangePassword((byte) 1);
         
         sysUserMapper.insert(user);
+        auditLogService.record("USER_CREATE", "SYS_USER", user.getId(),
+                "创建用户 " + user.getUsername() + "，角色 " + user.getRole());
         
         log.info("管理员创建用户: {}, 角色: {}", dto.getUsername(), dto.getRole());
         
@@ -117,7 +120,7 @@ public class AdminUserController {
                     continue;
                 }
 
-                String initialPassword = generateInitialPassword(dto.getUsername());
+                String initialPassword = DEFAULT_INITIAL_PASSWORD;
                 
                 SysUser user = new SysUser();
                 user.setUsername(dto.getUsername());
@@ -128,6 +131,8 @@ public class AdminUserController {
                 user.setMustChangePassword((byte) 1);
                 
                 sysUserMapper.insert(user);
+                auditLogService.record("USER_IMPORT", "SYS_USER", user.getId(),
+                        "批量导入用户 " + user.getUsername() + "，角色 " + user.getRole());
                 successUsers.add(user);
                 credentials.add(Map.of(
                         "username", user.getUsername(),
@@ -157,11 +162,13 @@ public class AdminUserController {
             throw new BusinessException(404, "用户不存在");
         }
 
-        String newPassword = "openlab123";
+        String newPassword = DEFAULT_INITIAL_PASSWORD;
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setMustChangePassword((byte) 1);
         sysUserMapper.updateById(user);
         authTokenService.invalidateUserToken(id);
+        auditLogService.record("USER_RESET_PASSWORD", "SYS_USER", id,
+                "重置用户密码 " + user.getUsername());
 
         log.info("管理员重置用户密码: {}", user.getUsername());
         
@@ -169,7 +176,7 @@ public class AdminUserController {
         resp.setUserId(user.getId());
         resp.setUsername(user.getUsername());
         resp.setNewPassword(newPassword);
-        resp.setMessage("密码已重置为 openlab123");
+        resp.setMessage("密码已重置为 " + DEFAULT_INITIAL_PASSWORD);
         return Result.success(resp);
     }
 
@@ -187,6 +194,8 @@ public class AdminUserController {
         wrapper.eq(SysUser::getUsername, user.getUsername());
         sysUserMapper.delete(wrapper);
         authTokenService.invalidateUserToken(id);
+        auditLogService.record("USER_DELETE", "SYS_USER", id,
+                "删除用户 " + user.getUsername() + "，角色 " + user.getRole());
         log.info("管理员删除用户: {}", user.getUsername());
         return Result.success();
     }
@@ -196,11 +205,20 @@ public class AdminUserController {
     public Result<IPage<StudentInfoVO>> listUsers(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) String role) {
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String keyword) {
         Page<SysUser> pageParam = new Page<>(page, size);
-        LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SysUser> wrapper = activeUserQuery();
         if (role != null && !role.isEmpty()) {
             wrapper.eq(SysUser::getRole, role);
+        }
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String exactKeyword = keyword.trim();
+            wrapper.and(q -> q.eq(SysUser::getUsername, exactKeyword)
+                    .or()
+                    .eq(SysUser::getRealName, exactKeyword)
+                    .or()
+                    .eq(SysUser::getPhone, exactKeyword));
         }
         wrapper.orderByDesc(SysUser::getCreateTime);
         IPage<SysUser> userPage = sysUserMapper.selectPage(pageParam, wrapper);
@@ -254,14 +272,15 @@ public class AdminUserController {
     @GetMapping("/user/stats")
     @RequireRole("ADMIN")
     public Result<Map<String, Object>> getUserStats() {
-        Long total = sysUserMapper.selectCount(null);
-        Long teachers = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>().eq(SysUser::getRole, "TEACHER"));
-        Long assistants = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>().eq(SysUser::getRole, "ASSISTANT"));
-        Long students = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>().eq(SysUser::getRole, "STUDENT"));
+        Long total = sysUserMapper.selectCount(activeUserQuery());
+        Long teachers = sysUserMapper.selectCount(activeUserQuery().eq(SysUser::getRole, "TEACHER"));
+        Long assistants = sysUserMapper.selectCount(activeUserQuery().eq(SysUser::getRole, "ASSISTANT"));
+        Long students = sysUserMapper.selectCount(activeUserQuery().eq(SysUser::getRole, "STUDENT"));
         return Result.success(Map.of("total", total, "teachers", teachers, "assistants", assistants, "students", students));
     }
 
-    private String generateInitialPassword(String username) {
-        return SecurePasswordGenerator.generate();
+    private LambdaQueryWrapper<SysUser> activeUserQuery() {
+        return new LambdaQueryWrapper<SysUser>().eq(SysUser::getIsDeleted, (byte) 0);
     }
+
 }

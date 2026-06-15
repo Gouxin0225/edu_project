@@ -44,6 +44,24 @@ public class AuthTokenService {
         return StringUtils.hasText(activeToken) && activeToken.equals(token);
     }
 
+    public boolean isActiveOrRestoreToken(Long userId, String token) {
+        if (userId == null || !StringUtils.hasText(token)) {
+            return false;
+        }
+        String tokenKey = getTokenKey(userId);
+        String activeToken = redisTemplate.opsForValue().get(tokenKey);
+        if (StringUtils.hasText(activeToken)) {
+            return activeToken.equals(token);
+        }
+
+        long ttlMillis = getRemainingMillis(token);
+        if (ttlMillis <= 0) {
+            return false;
+        }
+        redisTemplate.opsForValue().set(tokenKey, token, ttlMillis, TimeUnit.MILLISECONDS);
+        return true;
+    }
+
     public boolean isBlacklisted(String token) {
         if (!StringUtils.hasText(token)) {
             return false;

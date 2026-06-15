@@ -98,14 +98,21 @@
 
             <div class="answer-section">
               <div class="section-title">学生答案：</div>
-              <div class="answer-text student-answer" :class="{ correct: answer.isCorrect === true, wrong: answer.isCorrect === false }">
+              <div
+                class="answer-text student-answer"
+                :class="{
+                  correct: answer.isCorrect === true,
+                  wrong: answer.isCorrect === false,
+                  'code-answer': answer.type === 'CODE'
+                }"
+              >
                 {{ formatAnswer(answer.studentAnswer, answer.type, answer.optionsJson) || '(未作答)' }}
               </div>
             </div>
 
             <div class="answer-section" v-if="result.showAnalysis && answer.standardAnswer">
               <div class="section-title">标准答案：</div>
-              <div class="answer-text standard-answer">
+              <div class="answer-text standard-answer" :class="{ 'code-answer': answer.type === 'CODE' }">
                 {{ formatAnswer(answer.standardAnswer, answer.type, answer.optionsJson) }}
               </div>
             </div>
@@ -117,6 +124,47 @@
                   {{ answer.isCorrect === null ? '未批改' : (answer.isCorrect ? '正确' : '错误') }}
                 </el-tag>
                 <span class="score-gained">得分：{{ answer.scoreGained ?? 0 }} / {{ answer.score }}</span>
+              </div>
+            </div>
+
+            <div class="answer-section" v-if="formatAiSuggestion(answer)">
+              <div class="section-title">AI评分建议：</div>
+              <div class="ai-suggest-box">
+                <div class="ai-score-row">
+                  <el-tag type="success" size="small" class="cyberpunk-tag">
+                    建议 {{ formatAiSuggestion(answer)?.suggestedScore }} / {{ answer.score }}
+                  </el-tag>
+                  <el-tag size="small" class="cyberpunk-tag">
+                    {{ confidenceText(formatAiSuggestion(answer)?.confidence) }}
+                  </el-tag>
+                </div>
+                <div v-if="formatAiSuggestion(answer)?.reasoning" class="analysis-text">
+                  {{ formatAiSuggestion(answer)?.reasoning }}
+                </div>
+                <div v-if="formatAiSuggestion(answer)?.matchedPoints.length" class="ai-point-row">
+                  <span>命中点：</span>
+                  <el-tag
+                    v-for="point in formatAiSuggestion(answer)?.matchedPoints"
+                    :key="point"
+                    size="small"
+                    type="success"
+                    effect="plain"
+                  >
+                    {{ point }}
+                  </el-tag>
+                </div>
+                <div v-if="formatAiSuggestion(answer)?.missingPoints.length" class="ai-point-row">
+                  <span>缺失/扣分点：</span>
+                  <el-tag
+                    v-for="point in formatAiSuggestion(answer)?.missingPoints"
+                    :key="point"
+                    size="small"
+                    type="warning"
+                    effect="plain"
+                  >
+                    {{ point }}
+                  </el-tag>
+                </div>
               </div>
             </div>
 
@@ -142,8 +190,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { getMyExamResult, type ExamResultData } from '@/api/exam'
+import type { QuestionResult } from '@/api/exam'
 
 const route = useRoute()
 const router = useRouter()
@@ -219,6 +268,39 @@ function formatAnswer(answer: string | null, type: string, optionsJson: string |
   return answer
 }
 
+function formatAiSuggestion(answer: QuestionResult) {
+  if (!answer.aiSuggestDetail && answer.aiSuggestScore == null) return null
+  if (answer.aiSuggestDetail) {
+    try {
+      const parsed = JSON.parse(answer.aiSuggestDetail)
+      return {
+        suggestedScore: Number(parsed.suggestedScore ?? answer.aiSuggestScore ?? 0),
+        reasoning: String(parsed.reasoning || parsed.suggestion || ''),
+        confidence: String(parsed.confidence || 'MEDIUM'),
+        matchedPoints: Array.isArray(parsed.matchedPoints) ? parsed.matchedPoints.map(String) : [],
+        missingPoints: Array.isArray(parsed.missingPoints) ? parsed.missingPoints.map(String) : []
+      }
+    } catch {
+    }
+  }
+  return {
+    suggestedScore: Number(answer.aiSuggestScore ?? 0),
+    reasoning: '',
+    confidence: 'MEDIUM',
+    matchedPoints: [],
+    missingPoints: []
+  }
+}
+
+function confidenceText(confidence?: string) {
+  const map: Record<string, string> = {
+    HIGH: '高置信',
+    MEDIUM: '中置信',
+    LOW: '低置信'
+  }
+  return confidence ? (map[confidence] || confidence) : '中置信'
+}
+
 async function loadResult() {
   loading.value = true
   try {
@@ -239,7 +321,7 @@ onMounted(() => {
 <style scoped>
 .page-container {
   padding: 0;
-  background: var(--bg-base, #030303);
+  background: var(--bg-base);
   min-height: 100vh;
 }
 
@@ -276,18 +358,18 @@ onMounted(() => {
 
 .result-card {
   margin-bottom: 16px;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 :deep(.el-card__header) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .result-summary {
@@ -300,7 +382,7 @@ onMounted(() => {
 
 .stat-label {
   font-size: 14px;
-  color: #909090;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
@@ -310,7 +392,7 @@ onMounted(() => {
 .stat-value {
   font-size: 28px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -330,7 +412,7 @@ onMounted(() => {
 }
 
 .stat-value.time {
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 22px;
 }
 
@@ -340,8 +422,8 @@ onMounted(() => {
 
 .answers-card {
   margin-top: 16px;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
@@ -352,19 +434,19 @@ onMounted(() => {
 }
 
 .question-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
   clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
 }
 
 :deep(.el-card__header) {
-  background: #0a0a0a !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
 }
 
 .question-header {
@@ -396,7 +478,7 @@ onMounted(() => {
   line-height: 1.7;
   margin-bottom: 16px;
   white-space: pre-wrap;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -406,7 +488,7 @@ onMounted(() => {
 
 .section-title {
   font-weight: 500;
-  color: #909090;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
@@ -416,11 +498,11 @@ onMounted(() => {
 
 .options-text {
   padding: 8px 12px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   line-height: 1.8;
   font-family: 'JetBrains Mono', monospace;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .option-item {
@@ -434,11 +516,18 @@ onMounted(() => {
 
 .answer-text {
   padding: 10px 12px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a2e;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   line-height: 1.6;
   font-family: 'JetBrains Mono', monospace;
-  color: #e0e0e0;
+  color: var(--text-primary);
+}
+
+.code-answer {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  tab-size: 4;
+  word-break: normal;
 }
 
 .student-answer.correct {
@@ -474,7 +563,7 @@ onMounted(() => {
   background: rgba(57, 255, 20, 0.05);
   border: 1px solid rgba(57, 255, 20, 0.2);
   border-left: 3px solid #39ff14;
-  color: #e0e0e0;
+  color: var(--text-primary);
   line-height: 1.6;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -511,13 +600,13 @@ onMounted(() => {
 
 .empty-card {
   margin-top: 16px;
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .empty-tip {
   text-align: center;
-  color: #909090;
+  color: var(--text-secondary);
   padding: 40px 0;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -534,7 +623,7 @@ onMounted(() => {
 }
 
 :deep(.el-empty__description) {
-  color: #909090 !important;
+  color: var(--text-secondary) !important;
 }
 
 :deep(.el-empty__image svg) {

@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { EduRequestConfig } from '@/utils/request'
 import type { QuestionRecord } from './question'
 
 export interface ExamFormData {
@@ -9,6 +10,9 @@ export interface ExamFormData {
   type?: string
   duration?: number
   passScore?: number
+  totalScore?: number
+  requireSurveyBeforeSubmit?: boolean
+  requiredSurveyId?: number | null
 }
 
 export interface ExamRecord {
@@ -20,7 +24,10 @@ export interface ExamRecord {
   totalScore: number
   duration?: number
   passScore?: number
+  requireSurveyBeforeSubmit?: boolean
+  requiredSurveyId?: number | null
   status?: string
+  editable?: boolean
   targetClassIds: number[]
   creatorId: number
   createTime?: string
@@ -43,11 +50,14 @@ export const getMyClasses = () =>
 
 export const getQuestionList = (params: {
   page: number; size: number
-  courseCategory?: string; type?: string; difficulty?: string
+  courseCategory?: string; type?: string; difficulty?: string; creatorId?: string
 }) => request.get<any, { code: number; data: { records: QuestionRecord[]; total: number; size: number; current: number } }>('/api/question', { params })
 
 export const createExam = (data: ExamFormData) =>
   request.post<any, { code: number; data: ExamRecord }>('/api/exam', data)
+
+export const updateExam = (examId: number, data: ExamFormData) =>
+  request.put<any, { code: number; data: ExamRecord }>(`/api/exam/${examId}`, data)
 
 export const addExamQuestions = (examId: number, questionIds: number[]) =>
   request.post<any, { code: number }>(`/api/exam/${examId}/questions`, { questionIds })
@@ -124,6 +134,8 @@ export interface QuestionResult {
   isCorrect: boolean | null
   scoreGained: number | null
   analysis: string | null
+  aiSuggestScore?: number | null
+  aiSuggestDetail?: string | null
 }
 
 export interface ExamResultData {
@@ -157,7 +169,10 @@ export interface ExamProgressData {
 }
 
 export const resumeExam = (examId: number) =>
-  request.get<any, { code: number; data: ExamProgressData }>(`/api/exam/${examId}/resume`)
+  request.get<any, { code: number; data: ExamProgressData }>(
+    `/api/exam/${examId}/resume`,
+    { silentError: true } as EduRequestConfig
+  )
 
 export interface SaveAnswerItem {
   questionId: number
@@ -169,6 +184,18 @@ export const saveExamAnswers = (examId: number, answers: SaveAnswerItem[]) =>
 
 export const submitExam = (examId: number) =>
   request.post<any, { code: number; message: string }>(`/api/exam/${examId}/submit`)
+
+export interface ExamSubmitRequirement {
+  requireSurvey: boolean
+  surveySubmitted: boolean
+  surveyExpired?: boolean
+  surveyId: number | null
+  surveyTitle: string | null
+  message?: string | null
+}
+
+export const getExamSubmitRequirement = (examId: number) =>
+  request.get<any, { code: number; data: ExamSubmitRequirement }>(`/api/exam/${examId}/submit-requirement`)
 
 export const reportScreenSwitch = (examId: number) =>
   request.post<any, { code: number; data: number }>(`/api/exam/${examId}/screen-switch`)
@@ -196,6 +223,8 @@ export interface AnswerItem {
   isCorrect: boolean | null
   scoreGained: number | null
   questionScore: number
+  aiSuggestScore?: number | null
+  aiSuggestDetail?: string | null
 }
 
 export interface SubmissionDetail {
@@ -215,6 +244,8 @@ export const getSubmissionDetail = (examId: number, submissionId: number) =>
 export interface GradeItem {
   questionId: number
   scoreGained: number
+  aiSuggestScore?: number | null
+  aiSuggestDetail?: string | null
 }
 
 export const submitGrade = (examId: number, submissionId: number, grades: GradeItem[]) =>
@@ -270,12 +301,14 @@ export interface ExamParticipation {
   examId: number
   examTitle: string
   submittedStudents: ParticipationStudent[]
+  inProgressStudents: ParticipationStudent[]
   notSubmittedStudents: ParticipationStudent[]
 }
 
 export interface ParticipationStudent {
   studentId: number
   studentName: string
+  startTime: string | null
   submitTime: string | null
   status: string
 }

@@ -23,14 +23,14 @@
 
 .page-container {
   padding: 0;
-  background: #030303;
+  background: var(--bg-surface);
   min-height: 100%;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .cyber-card {
-  background: #0a0a0a !important;
-  border: 1px solid #1a1a2e !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   box-shadow: 0 0 30px rgba(255, 152, 0, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5) !important;
   height: calc(100vh - 120px);
@@ -38,12 +38,12 @@
 
 .cyber-card :deep(.el-card__header) {
   background: rgba(26, 26, 46, 0.4) !important;
-  border-bottom: 1px solid #1a1a2e !important;
+  border-bottom: 1px solid var(--border) !important;
   padding: 15px 20px !important;
 }
 
 .cyber-card :deep(.el-card__body) {
-  background: #0a0a0a !important;
+  background: var(--bg-surface) !important;
   padding: 40px 20px !important;
   height: calc(100% - 60px);
   display: flex;
